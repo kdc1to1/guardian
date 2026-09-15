@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Kids Development Center</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#F2542D">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ================= TOPBAR ================= -->
+  <div class="topbar" id="topbar" style="display:none;">
+    <div class="brand">
+      <div class="brand-badge">K</div>
+      <div class="brand-name">Kids Development<strong id="guardianGreetName">সেন্টার</strong></div>
+    </div>
+    <button class="icon-btn has-alert" id="btnAlerts" title="নোটিফিকেশন">🔔<span class="dot"></span></button>
+  </div>
+
+  <!-- ================= LOGIN ================= -->
+  <section class="screen active" id="screen-login">
+    <div class="auth-hero">
+      <div class="brand-badge" style="margin-bottom:14px;">K</div>
+      <h1 class="display">Kids Development Center</h1>
+      <p>শিশুর ব্রেইন ডেভেলপমেন্ট, ইসলামী মূল্যবোধ ও ভাষাগত দক্ষতা — খেলা, কবিতা ও গল্পের মাধ্যমে। One To One School-এর তত্ত্বাবধানে।</p>
+    </div>
+
+    <div class="field">
+      <label for="loginEmail">ইমেইল</label>
+      <input type="email" id="loginEmail" placeholder="you@example.com">
+      <small class="err" id="loginEmailErr"></small>
+    </div>
+    <div class="field">
+      <label for="loginPassword">পাসওয়ার্ড</label>
+      <input type="password" id="loginPassword" placeholder="••••••••">
+    </div>
+
+    <button class="btn-primary" id="btnLogin">লগইন করুন</button>
+    <p class="link-switch"><a id="goForgotPw">পাসওয়ার্ড ভুলে গেছেন?</a></p>
+
+    <p class="link-switch">নতুন অভিভাবক? <a id="goRegister">রেজিস্ট্রেশন করুন</a></p>
+  </section>
+
+  <!-- ================= REGISTER ================= -->
+  <section class="screen" id="screen-register">
+    <div class="section-head">
+      <button class="back" id="backFromRegister">←</button>
+      <h2>নতুন রেজিস্ট্রেশন</h2>
+    </div>
+
+    <form id="registerForm">
+      <div class="field">
+        <label>শিশুর নাম *</label>
+        <input required id="regChildName" type="text">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>শিশুর জন্ম তারিখ *</label>
+          <input required id="regChildDob" type="date">
+          <small class="err" id="dobErr"></small>
+        </div>
+        <div class="field">
+          <label>লিঙ্গ *</label>
+          <select required id="regChildGender">
+            <option value="">নির্বাচন করুন</option>
+            <option value="male">ছেলে</option>
+            <option value="female">মেয়ে</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>অভিভাবক (আপনি) — পিতা বা মাতা? *</label>
+        <select required id="regRelation">
+          <option value="">নির্বাচন করুন</option>
+          <option value="father">পিতা</option>
+          <option value="mother">মাতা</option>
+        </select>
+      </div>
+      <div class="field">
+        <label id="regGuardianNameLabel">অভিভাবকের নাম (আপনার নাম) *</label>
+        <input required id="regGuardianName" type="text">
+      </div>
+      <div class="field">
+        <label id="regOtherParentLabel">অপর অভিভাবকের নাম</label>
+        <input id="regOtherParentName" type="text">
+      </div>
+
+      <div class="field">
+        <label>হোয়াটসএপ নাম্বার *</label>
+        <input required id="regWhatsapp" type="tel" placeholder="+8801XXXXXXXXX">
+      </div>
+      <div class="field">
+        <label>ইমেইল *</label>
+        <input required id="regEmail" type="email">
+      </div>
+      <div class="field">
+        <label>পাসওয়ার্ড *</label>
+        <input required id="regPassword" type="password" placeholder="কমপক্ষে ৬ ডিজিট/অক্ষর">
+      </div>
+      <div class="field">
+        <label>বর্তমান ঠিকানা *</label>
+        <textarea required id="regCurrentAddress"></textarea>
+      </div>
+      <div class="field">
+        <label>স্থায়ী ঠিকানা *</label>
+        <textarea required id="regPermanentAddress"></textarea>
+      </div>
+
+      <button type="button" class="btn-primary" id="btnRegisterSubmit">রেজিস্ট্রেশন সম্পন্ন করুন</button>
+      <small class="err" id="registerErr"></small>
+    </form>
+  </section>
+
+  <!-- ================= DASHBOARD ================= -->
+  <section class="screen" id="screen-dashboard">
+    <div class="greeting">
+      <h1 class="display" id="greetTitle">সালাম, অভিভাবক</h1>
+      <p id="greetSub">আজ আপনার শিশুর জন্য কিছু নতুন এক্টিভিটি বেছে নিন</p>
+    </div>
+
+    <div class="premium-banner" id="premiumBanner">
+      <div class="txt">
+        <strong id="premiumTitle">ফ্রি ভার্সন ব্যবহার করছেন</strong>
+        <span id="premiumSub">সব কনটেন্ট আনলক করতে প্রিমিয়ামে যান</span>
+      </div>
+      <button id="btnGoPremium">প্রিমিয়াম নিন</button>
+    </div>
+
+    <div class="feature-grid">
+      <div class="feature-card" data-go="screen-activities">
+        <div class="emoji">🧩</div>
+        <div><div class="title">গেইম / এক্টিভিটি</div><div class="sub">খেলে খেলে শেখা</div></div>
+      </div>
+      <div class="feature-card" data-go="screen-poems">
+        <div class="emoji">📖</div>
+        <div><div class="title">কবিতা</div><div class="sub">ছন্দে ছন্দে শিখুন</div></div>
+      </div>
+      <div class="feature-card" data-go="screen-stories">
+        <div class="emoji">🌙</div>
+        <div><div class="title">গল্প</div><div class="sub">গল্পে গল্পে নৈতিকতা</div></div>
+      </div>
+      <div class="feature-card" data-go="screen-knowkids">
+        <div class="emoji">🌱</div>
+        <div><div class="title">শিশুদের জানুন</div><div class="sub">প্যারেন্টিং আর্টিকেল</div></div>
+      </div>
+      <div class="feature-card" data-go="screen-tools">
+        <div class="emoji">🧸</div>
+        <div><div class="title">খেলার টুলস কিনুন</div><div class="sub">সরাসরি অর্ডার করুন</div></div>
+      </div>
+      <div class="feature-card" data-go="screen-mela">
+        <div class="emoji">🏅</div>
+        <div><div class="title">শিশু মেলা</div><div class="sub">অগ্রগতি দেখুন</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ACTIVITIES ================= -->
+  <section class="screen" id="screen-activities">
+    <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>গেইম / এক্টিভিটি</h2></div>
+    <div id="activitiesList"></div>
+  </section>
+
+  <!-- ================= POEMS ================= -->
+  <section class="screen" id="screen-poems">
+    <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>কবিতা</h2></div>
+    <div class="rules-box"><strong>কবিতা বলার নিয়মাবলী</strong><span id="poemRulesText">লোড হচ্ছে...</span></div>
+    <div id="poemsList"></div>
+  </section>
+
+  <!-- ================= STORIES ================= -->
+  <section class="screen" id="screen-stories">
+    <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>গল্প</h2></div>
+    <div class="rules-box"><strong>গল্প বলার নিয়মাবলী</strong><span id="storyRulesText">লোড হচ্ছে...</span></div>
+    <div id="storiesList"></div>
+  </section>
+
+  <!-- ================= KNOW KIDS ================= -->
+  <section class="screen" id="screen-knowkids">
+    <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>শিশুদের জানুন</h2></div>
+    <div class="marquee-wrap"><div class="marquee-text" id="marqueeText">শিশুদের সুষ্ঠুভাবে গড়ে তুলুন; আগামী পৃথিবী সুন্দর করুন</div></div>
+    <a class="know-kids-link" id="knowKidsArticleLink" href="#" target="_blank">নিবন্ধ পড়তে এখানে ক্লিক করুন →</a>
+  </section>
+
+  <!-- ================= TOOLS ================= -->
+  <section class="screen" id="screen-tools">
+    <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>খেলার টুলস কিনুন</h2></div>
+    <a href="#" id="goMyOrders" style="display:block; text-align:left; font-size:13.5px; font-weight:700; margin-bottom:12px;">📦 আমার অর্ডারসমূহ দেখুন →</a>
+    <div id="toolsList"></div>
+  </section>
+
+  <!-- ================= MY ORDERS ================= -->
+  <section class="screen" id="screen-orders">
+    <div class="section-head"><button class="back" data-go="screen-tools">←</button><h2>আমার অর্ডারসমূহ</h2></div>
+    <div id="myOrdersList"></div>
+  </section>
+
+  <!-- ================= SHISHU MELA ================= -->
+  <section class="screen" id="screen-mela">
+    <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>শিশু মেলা</h2></div>
+    <div id="melaList"></div>
+  </section>
+
+  <!-- ================= PROFILE / PREMIUM ================= -->
+  <section class="screen" id="screen-premium">
+    <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>প্রিমিয়াম ভার্সন</h2></div>
+    <div class="rules-box">
+      <strong>পেমেন্টের নিয়ম</strong>
+      বিকাশ / নগদ / রকেট / ব্যাংকে পে করুন, তারপর ট্রানজেকশন আইডি দিয়ে রিকুয়েস্ট করুন। এডমিন যাচাই করে অ্যাপ্রুভ করলেই সব কনটেন্ট আনলক হবে।
+    </div>
+    <div class="field">
+      <label>পেমেন্ট মাধ্যম *</label>
+      <select id="payMethod">
+        <option value="bkash">বিকাশ</option>
+        <option value="nagad">নগদ</option>
+        <option value="rocket">রকেট</option>
+        <option value="bank">ব্যাংক</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>ট্রানজেকশন আইডি *</label>
+      <input id="payTrxId" type="text">
+    </div>
+    <button class="btn-primary" id="btnSubmitPayment">রিকুয়েস্ট পাঠান</button>
+    <div id="paymentHistory" style="margin-top:20px;"></div>
+  </section>
+
+  <!-- ================= BOTTOM NAV ================= -->
+  <div class="bottom-nav" id="bottomNav" style="display:none;">
+    <button data-go="screen-dashboard" class="nav-btn active">🏠<span>হোম</span></button>
+    <button data-go="screen-tools" class="nav-btn">🧸<span>টুলস</span></button>
+    <button data-go="screen-mela" class="nav-btn">🏅<span>মেলা</span></button>
+    <button data-go="screen-premium" class="nav-btn">⭐<span>প্রিমিয়াম</span></button>
+  </div>
+
+  <!-- ================= MODAL: DETAIL ================= -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal-sheet">
+      <button class="close-x" id="closeDetailModal">✕</button>
+      <div id="detailModalBody"></div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: ORDER ================= -->
+  <div class="modal-overlay" id="orderModal">
+    <div class="modal-sheet">
+      <button class="close-x" id="closeOrderModal">✕</button>
+      <h3 style="margin-bottom:14px;">অর্ডার করুন</h3>
+      <div class="field"><label>পরিমাণ</label><input type="number" id="orderQty" value="1" min="1"></div>
+      <div class="field"><label>ঠিকানা</label><textarea id="orderAddress"></textarea></div>
+      <div class="field"><label>হোয়াটসএপ নাম্বার</label><input type="tel" id="orderWhatsapp"></div>
+      <button class="btn-primary" id="btnConfirmOrder">অর্ডার নিশ্চিত করুন</button>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: RECEIPT ================= -->
+  <div class="modal-overlay" id="receiptModal">
+    <div class="modal-sheet" style="max-width:420px; margin:0 auto;">
+      <button class="close-x" id="closeReceiptModal">✕</button>
+      <div id="receiptTemplate" style="background:#fff; border-radius:14px; padding:20px; font-family:'Hind Siliguri',sans-serif;">
+        <h2 style="margin:0 0 4px; font-family:'Baloo Da 2',sans-serif; color:#F2542D;">Kids Development Center</h2>
+        <p style="margin:0 0 14px; color:#666; font-size:13px;">ক্রয় রশিদ</p>
+        <div id="receiptBody" style="font-size:14px; line-height:1.9;"></div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:16px;">
+        <button class="btn-primary" id="btnDownloadReceiptImg" style="flex:1;">ছবি ডাউনলোড</button>
+        <button class="btn-primary alt" id="btnDownloadReceiptPdf" style="flex:1;">PDF ডাউনলোড</button>
+      </div>
+      <button class="btn-secondary" id="btnShareReceipt" style="margin-top:10px;">শেয়ার করুন (হোয়াটসএপ)</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script type="module" src="js/app.js"></script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>

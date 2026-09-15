@@ -1,0 +1,68 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // গার্ডিয়ান প্রোফাইল
+    match /guardians/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // শিশুর তথ্য
+    match /children/{childId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.guardianUid == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.guardianUid == request.auth.uid;
+      allow update: if isAdmin() || (isSignedIn() && resource.data.guardianUid == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // কনটেন্ট: গেইম/এক্টিভিটি, কবিতা, গল্প, খেলার টুলস — সবাই পড়তে পারবে, শুধু এডমিন লিখতে পারবে
+    match /activities/{id}   { allow read: if true; allow write: if isAdmin(); }
+    match /poems/{id}        { allow read: if true; allow write: if isAdmin(); }
+    match /stories/{id}      { allow read: if true; allow write: if isAdmin(); }
+    match /tools/{id}        { allow read: if true; allow write: if isAdmin(); }
+    match /siteContent/{id}  { allow read: if true; allow write: if isAdmin(); }
+
+    // পেমেন্ট রিকুয়েস্ট
+    match /paymentRequests/{id} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.guardianUid == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.guardianUid == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // টুলস অর্ডার
+    match /orders/{id} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.guardianUid == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.guardianUid == request.auth.uid;
+      allow update: if isAdmin() || (isSignedIn() && resource.data.guardianUid == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // শিশুর অগ্রগতি রিপোর্ট
+    match /progressReports/{id} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.guardianUid == request.auth.uid);
+      allow create: if isAdmin() || (isSignedIn() && request.resource.data.guardianUid == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // এডমিন তালিকা — শুধু এডমিন নিজে পড়তে পারবে, লেখা যাবে না ক্লায়েন্ট থেকে
+    match /admins/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+  }
+}
