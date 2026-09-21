@@ -14,18 +14,20 @@
   <!-- ================= TOPBAR ================= -->
   <div class="topbar" id="topbar" style="display:none;">
     <div class="brand">
-      <div class="brand-badge">K</div>
-      <div class="brand-name">Kids Development<strong id="guardianGreetName">সেন্টার</strong></div>
+      <img src="logo.png" alt="KDC" class="brand-badge-img">
+      <div class="brand-name">Kids Development Center</div>
     </div>
-    <button class="icon-btn has-alert" id="btnAlerts" title="নোটিফিকেশন">🔔<span class="dot"></span></button>
+    <div style="display:flex; gap:8px;">
+      <button class="icon-btn" id="btnProfile" title="প্রোফাইল">👤</button>
+      <button class="icon-btn has-alert" id="btnAlerts" title="নোটিফিকেশন">🔔<span class="dot"></span></button>
+    </div>
   </div>
 
   <!-- ================= LOGIN ================= -->
   <section class="screen active" id="screen-login">
     <div class="auth-hero">
-      <div class="brand-badge" style="margin-bottom:14px;">K</div>
+      <img src="logo.png" alt="KDC" class="login-logo">
       <h1 class="display">Kids Development Center</h1>
-      <p>শিশুর ব্রেইন ডেভেলপমেন্ট, ইসলামী মূল্যবোধ ও ভাষাগত দক্ষতা — খেলা, কবিতা ও গল্পের মাধ্যমে। One To One School-এর তত্ত্বাবধানে।</p>
     </div>
 
     <div class="field">
@@ -42,6 +44,8 @@
     <p class="link-switch"><a id="goForgotPw">পাসওয়ার্ড ভুলে গেছেন?</a></p>
 
     <p class="link-switch">নতুন অভিভাবক? <a id="goRegister">রেজিস্ট্রেশন করুন</a></p>
+
+    <p class="login-footer">Under the Supervision of <strong>One To One School</strong></p>
   </section>
 
   <!-- ================= REGISTER ================= -->
@@ -88,14 +92,26 @@
         <label id="regOtherParentLabel">অপর অভিভাবকের নাম</label>
         <input id="regOtherParentName" type="text">
       </div>
+      <div class="field-row">
+        <div class="field">
+          <label>বাবার পেশা</label>
+          <input id="regFatherOccupation" type="text">
+        </div>
+        <div class="field">
+          <label>মায়ের পেশা</label>
+          <input id="regMotherOccupation" type="text">
+        </div>
+      </div>
 
       <div class="field">
         <label>হোয়াটসএপ নাম্বার *</label>
-        <input required id="regWhatsapp" type="tel" placeholder="+8801XXXXXXXXX">
+        <input required id="regWhatsapp" type="tel" placeholder="01XXXXXXXXX">
+        <small class="hint">কান্ট্রি কোড না দিলেও চলবে (স্বয়ংক্রিয়ভাবে +880 ধরে নেওয়া হবে); কান্ট্রি কোডসহ দিলেও সমস্যা নেই।</small>
       </div>
       <div class="field">
         <label>ইমেইল *</label>
         <input required id="regEmail" type="email">
+        <small class="hint"><strong>অবশ্যই একটি সচল ও নিয়মিত ব্যবহৃত ইমেইল দিন</strong> — পাসওয়ার্ড ভুলে গেলে এই ইমেইল দিয়েই উদ্ধার করা যাবে।</small>
       </div>
       <div class="field">
         <label>পাসওয়ার্ড *</label>
@@ -143,6 +159,14 @@
         <div class="emoji">🌙</div>
         <div><div class="title">গল্প</div><div class="sub">গল্পে গল্পে নৈতিকতা</div></div>
       </div>
+      <div class="feature-card" data-go="screen-manners">
+        <div class="emoji">🤝</div>
+        <div><div class="title">আদব শিষ্টাচার</div><div class="sub">ভালো আচরণ শিখুন</div></div>
+      </div>
+      <div class="feature-card" data-go="screen-duas">
+        <div class="emoji">🤲</div>
+        <div><div class="title">সূরা ও দুআ</div><div class="sub">প্রতিদিনের আমল</div></div>
+      </div>
       <div class="feature-card" data-go="screen-knowkids">
         <div class="emoji">🌱</div>
         <div><div class="title">শিশুদের জানুন</div><div class="sub">প্যারেন্টিং আর্টিকেল</div></div>
@@ -153,7 +177,7 @@
       </div>
       <div class="feature-card" data-go="screen-mela">
         <div class="emoji">🏅</div>
-        <div><div class="title">শিশু মেলা</div><div class="sub">অগ্রগতি দেখুন</div></div>
+        <div><div class="title">শিশুর অগ্রগতি রিপোর্ট</div><div class="sub">৫ ক্যাটাগরিতে অগ্রগতি</div></div>
       </div>
     </div>
   </section>
@@ -178,6 +202,20 @@
     <div id="storiesList"></div>
   </section>
 
+  <!-- ================= ADOB SHISHTACHAR ================= -->
+  <section class="screen" id="screen-manners">
+    <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>আদব শিষ্টাচার</h2></div>
+    <div class="rules-box"><strong>সাধারণ নিয়মাবলী</strong><span id="mannerRulesText">লোড হচ্ছে...</span></div>
+    <div id="mannersList"></div>
+  </section>
+
+  <!-- ================= SURA O DUA ================= -->
+  <section class="screen" id="screen-duas">
+    <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>সূরা ও দুআ</h2></div>
+    <div class="rules-box"><strong>সাধারণ নিয়মাবলী</strong><span id="duaRulesText">লোড হচ্ছে...</span></div>
+    <div id="duasList"></div>
+  </section>
+
   <!-- ================= KNOW KIDS ================= -->
   <section class="screen" id="screen-knowkids">
     <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>শিশুদের জানুন</h2></div>
@@ -198,10 +236,23 @@
     <div id="myOrdersList"></div>
   </section>
 
-  <!-- ================= SHISHU MELA ================= -->
+  <!-- ================= শিশুর অগ্রগতি রিপোর্ট ================= -->
   <section class="screen" id="screen-mela">
-    <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>শিশু মেলা</h2></div>
-    <div id="melaList"></div>
+    <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>শিশুর অগ্রগতি রিপোর্ট</h2></div>
+    <p style="font-size:13px; color:var(--ink-soft); margin:0 0 16px;">প্রতিটি ক্যাটাগরিতে আপনার শিশুর অগ্রগতি (%) ও একটি সংক্ষিপ্ত নোট আপডেট করুন।</p>
+    <div id="progressCategories"></div>
+  </section>
+
+  <!-- ================= PROFILE ================= -->
+  <section class="screen" id="screen-profile">
+    <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>প্রোফাইল</h2></div>
+    <div class="field"><label>অভিভাবকের নাম</label><input id="profGuardianName" type="text"></div>
+    <div class="field"><label>হোয়াটসএপ নাম্বার</label><input id="profWhatsapp" type="tel"></div>
+    <div class="field"><label>ইমেইল</label><input id="profEmail" type="email" disabled></div>
+    <div class="field"><label>বর্তমান ঠিকানা</label><textarea id="profCurrentAddress"></textarea></div>
+    <div class="field"><label>স্থায়ী ঠিকানা</label><textarea id="profPermanentAddress"></textarea></div>
+    <button class="btn-primary" id="btnSaveProfile">সংরক্ষণ করুন</button>
+    <button class="btn-secondary" id="btnLogout" style="margin-top:14px;">লগআউট</button>
   </section>
 
   <!-- ================= PROFILE / PREMIUM ================= -->
@@ -232,7 +283,7 @@
   <div class="bottom-nav" id="bottomNav" style="display:none;">
     <button data-go="screen-dashboard" class="nav-btn active">🏠<span>হোম</span></button>
     <button data-go="screen-tools" class="nav-btn">🧸<span>টুলস</span></button>
-    <button data-go="screen-mela" class="nav-btn">🏅<span>মেলা</span></button>
+    <button data-go="screen-mela" class="nav-btn">🏅<span>রিপোর্ট</span></button>
     <button data-go="screen-premium" class="nav-btn">⭐<span>প্রিমিয়াম</span></button>
   </div>
 

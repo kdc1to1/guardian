@@ -28,12 +28,20 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // কনটেন্ট: গেইম/এক্টিভিটি, কবিতা, গল্প, খেলার টুলস — সবাই পড়তে পারবে, শুধু এডমিন লিখতে পারবে
+    // কনটেন্ট: গেইম/এক্টিভিটি, কবিতা, গল্প, আদব শিষ্টাচার, সূরা ও দুআ, খেলার টুলস — সবাই পড়তে পারবে, শুধু এডমিন লিখতে পারবে
     match /activities/{id}   { allow read: if true; allow write: if isAdmin(); }
     match /poems/{id}        { allow read: if true; allow write: if isAdmin(); }
     match /stories/{id}      { allow read: if true; allow write: if isAdmin(); }
+    match /manners/{id}      { allow read: if true; allow write: if isAdmin(); }
+    match /duas/{id}         { allow read: if true; allow write: if isAdmin(); }
     match /tools/{id}        { allow read: if true; allow write: if isAdmin(); }
     match /siteContent/{id}  { allow read: if true; allow write: if isAdmin(); }
+
+    // শিশুর অগ্রগতি রিপোর্ট (৫ ক্যাটাগরি) — গার্ডিয়ান নিজের শিশুরটা পড়তে/লিখতে পারবে, এডমিন সবগুলো পড়তে পারবে
+    match /childProgress/{childId} {
+      allow read: if isAdmin() || (isSignedIn() && get(/databases/$(database)/documents/children/$(childId)).data.guardianUid == request.auth.uid);
+      allow write: if isAdmin() || (isSignedIn() && get(/databases/$(database)/documents/children/$(childId)).data.guardianUid == request.auth.uid);
+    }
 
     // পেমেন্ট রিকুয়েস্ট
     match /paymentRequests/{id} {
@@ -48,14 +56,6 @@ service cloud.firestore {
       allow read: if isAdmin() || (isSignedIn() && resource.data.guardianUid == request.auth.uid);
       allow create: if isSignedIn() && request.resource.data.guardianUid == request.auth.uid;
       allow update: if isAdmin() || (isSignedIn() && resource.data.guardianUid == request.auth.uid);
-      allow delete: if isAdmin();
-    }
-
-    // শিশুর অগ্রগতি রিপোর্ট
-    match /progressReports/{id} {
-      allow read: if isAdmin() || (isSignedIn() && resource.data.guardianUid == request.auth.uid);
-      allow create: if isAdmin() || (isSignedIn() && request.resource.data.guardianUid == request.auth.uid);
-      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 

@@ -1,7 +1,7 @@
 // js/admin.js
 import { auth, db } from "./firebase-config.js";
 import {
-  signInWithEmailAndPassword, signOut, onAuthStateChanged
+  signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection,
@@ -95,17 +95,17 @@ onSnapshot(query(collection(db, "activities"), orderBy("createdAt", "desc")), (s
 document.getElementById("btnAddPoem").addEventListener("click", async () => {
   await addDocTo("poems", {
     title: document.getElementById("poemTitle").value.trim(),
-    poet: document.getElementById("poemPoet").value.trim(),
-    learningOutcome: document.getElementById("poemOutcome").value.trim(),
+    author: document.getElementById("poemPoet").value.trim(),
+    wordpressLink: document.getElementById("poemLink").value.trim(),
     isFree: document.getElementById("poemFree").value === "true",
   });
-  ["poemTitle","poemPoet","poemOutcome"].forEach(id => document.getElementById(id).value = "");
+  ["poemTitle","poemPoet","poemLink"].forEach(id => document.getElementById(id).value = "");
 });
 onSnapshot(query(collection(db, "poems"), orderBy("createdAt", "desc")), (snap) => {
   const tb = document.querySelector("#tblPoems tbody"); tb.innerHTML = "";
   snap.forEach(d => {
     const p = d.data();
-    tb.innerHTML += `<tr><td>${p.title}</td><td>${p.poet||""}</td><td>${p.isFree?"ফ্রি":"পেইড"}</td>
+    tb.innerHTML += `<tr><td>${p.title}</td><td>${p.author||""}</td><td>${p.isFree?"ফ্রি":"পেইড"}</td>
       <td><button class="tiny-btn no" data-del="poems:${d.id}">মুছুন</button></td></tr>`;
   });
 });
@@ -115,10 +115,10 @@ document.getElementById("btnAddStory").addEventListener("click", async () => {
   await addDocTo("stories", {
     title: document.getElementById("storyTitle").value.trim(),
     author: document.getElementById("storyAuthor").value.trim(),
-    learningOutcome: document.getElementById("storyOutcome").value.trim(),
+    wordpressLink: document.getElementById("storyLink").value.trim(),
     isFree: document.getElementById("storyFree").value === "true",
   });
-  ["storyTitle","storyAuthor","storyOutcome"].forEach(id => document.getElementById(id).value = "");
+  ["storyTitle","storyAuthor","storyLink"].forEach(id => document.getElementById(id).value = "");
 });
 onSnapshot(query(collection(db, "stories"), orderBy("createdAt", "desc")), (snap) => {
   const tb = document.querySelector("#tblStories tbody"); tb.innerHTML = "";
@@ -129,16 +129,58 @@ onSnapshot(query(collection(db, "stories"), orderBy("createdAt", "desc")), (snap
   });
 });
 
+/* ---------------- আদব শিষ্টাচার ---------------- */
+document.getElementById("btnAddManner").addEventListener("click", async () => {
+  await addDocTo("manners", {
+    title: document.getElementById("mannerTitle").value.trim(),
+    author: document.getElementById("mannerAuthor").value.trim(),
+    wordpressLink: document.getElementById("mannerLink").value.trim(),
+    isFree: document.getElementById("mannerFree").value === "true",
+  });
+  ["mannerTitle","mannerAuthor","mannerLink"].forEach(id => document.getElementById(id).value = "");
+});
+onSnapshot(query(collection(db, "manners"), orderBy("createdAt", "desc")), (snap) => {
+  const tb = document.querySelector("#tblManners tbody"); tb.innerHTML = "";
+  snap.forEach(d => {
+    const m = d.data();
+    tb.innerHTML += `<tr><td>${m.title}</td><td>${m.author||""}</td><td>${m.isFree?"ফ্রি":"পেইড"}</td>
+      <td><button class="tiny-btn no" data-del="manners:${d.id}">মুছুন</button></td></tr>`;
+  });
+});
+
+/* ---------------- সূরা ও দুআ ---------------- */
+document.getElementById("btnAddDua").addEventListener("click", async () => {
+  await addDocTo("duas", {
+    title: document.getElementById("duaTitle").value.trim(),
+    author: document.getElementById("duaAuthor").value.trim(),
+    wordpressLink: document.getElementById("duaLink").value.trim(),
+    isFree: document.getElementById("duaFree").value === "true",
+  });
+  ["duaTitle","duaAuthor","duaLink"].forEach(id => document.getElementById(id).value = "");
+});
+onSnapshot(query(collection(db, "duas"), orderBy("createdAt", "desc")), (snap) => {
+  const tb = document.querySelector("#tblDuas tbody"); tb.innerHTML = "";
+  snap.forEach(d => {
+    const du = d.data();
+    tb.innerHTML += `<tr><td>${du.title}</td><td>${du.author||""}</td><td>${du.isFree?"ফ্রি":"পেইড"}</td>
+      <td><button class="tiny-btn no" data-del="duas:${d.id}">মুছুন</button></td></tr>`;
+  });
+});
+
 /* ---------------- SITE RULES + KNOW KIDS ---------------- */
 getDoc(doc(db, "siteContent", "rules")).then(s => {
   const d = s.data() || {};
   document.getElementById("ruleaPoem").value = d.poemRules || "";
   document.getElementById("ruleaStory").value = d.storyRules || "";
+  document.getElementById("ruleaManner").value = d.mannerRules || "";
+  document.getElementById("ruleaDua").value = d.duaRules || "";
 });
 document.getElementById("btnSaveRules").addEventListener("click", async () => {
   await setDoc(doc(db, "siteContent", "rules"), {
     poemRules: document.getElementById("ruleaPoem").value.trim(),
     storyRules: document.getElementById("ruleaStory").value.trim(),
+    mannerRules: document.getElementById("ruleaManner").value.trim(),
+    duaRules: document.getElementById("ruleaDua").value.trim(),
   });
   toast("নিয়মাবলী সেভ হয়েছে");
 });
@@ -213,15 +255,45 @@ onSnapshot(query(collection(db, "paymentRequests"), orderBy("createdAt", "desc")
   });
 });
 
-/* ---------------- CHILDREN / SHISHU MELA ---------------- */
-onSnapshot(query(collection(db, "children"), orderBy("createdAt", "desc")), (snap) => {
-  const tb = document.querySelector("#tblChildren tbody"); tb.innerHTML = "";
+/* ---------------- গার্ডিয়ানস ---------------- */
+window.__guardiansCache = window.__guardiansCache || {};
+onSnapshot(query(collection(db, "guardians"), orderBy("createdAt", "desc")), (snap) => {
+  const tb = document.querySelector("#tblGuardians tbody"); tb.innerHTML = "";
   snap.forEach(d => {
-    const c = d.data();
+    const g = { id: d.id, ...d.data() };
+    window.__guardiansCache[d.id] = g;
     tb.innerHTML += `<tr>
-      <td>${c.name}</td><td>${c.dob||""}</td><td>${c.level||"শুরু"}</td><td>${c.guardianUid.slice(0,6)}...</td>
-      <td><button class="tiny-btn ok" data-level="${d.id}">লেভেল আপডেট</button></td></tr>`;
+      <td>${g.guardianName || ""}</td><td>${g.email || ""}</td><td>${g.whatsapp || ""}</td>
+      <td><span class="pill ${g.isPremium ? "approved" : "pending"}">${g.isPremium ? "প্রিমিয়াম" : "ফ্রি"}</span></td>
+      <td><button class="tiny-btn ok" data-resend-reset="${g.email || ""}">রিসেট ইমেইল পাঠান</button></td></tr>`;
   });
+});
+
+/* ---------------- শিশুর অগ্রগতি রিপোর্ট (সব শিশু) ---------------- */
+window.__childrenCache = window.__childrenCache || {};
+window.__progressCache = window.__progressCache || {};
+const PROGRESS_KEYS = ["activity", "poem", "story", "manner", "dua"];
+
+function renderChildrenProgressTable() {
+  const tb = document.querySelector("#tblChildren tbody"); tb.innerHTML = "";
+  Object.values(window.__childrenCache).forEach(c => {
+    const prog = window.__progressCache[c.id] || {};
+    const cells = PROGRESS_KEYS.map(k => `${(prog[k] && prog[k].percent) || 0}%`);
+    tb.innerHTML += `<tr>
+      <td>${c.name}</td><td>${c.dob || ""}</td>
+      <td>${cells[0]}</td><td>${cells[1]}</td><td>${cells[2]}</td><td>${cells[3]}</td><td>${cells[4]}</td>
+      </tr>`;
+  });
+}
+onSnapshot(query(collection(db, "children"), orderBy("createdAt", "desc")), (snap) => {
+  window.__childrenCache = {};
+  snap.forEach(d => { window.__childrenCache[d.id] = { id: d.id, ...d.data() }; });
+  renderChildrenProgressTable();
+});
+onSnapshot(collection(db, "childProgress"), (snap) => {
+  window.__progressCache = {};
+  snap.forEach(d => { window.__progressCache[d.id] = d.data(); });
+  renderChildrenProgressTable();
 });
 
 /* ---------------- DELEGATED CLICK HANDLERS ---------------- */
@@ -249,13 +321,20 @@ document.addEventListener("click", async (e) => {
     await updateDoc(doc(db, "paymentRequests", reject.dataset.payReject), { status: "rejected", reviewedAt: serverTimestamp() });
     toast("বাতিল করা হয়েছে");
   }
-  const lvl = e.target.closest("[data-level]");
-  if (lvl) {
-    const newLevel = prompt("নতুন লেভেল লিখুন (যেমন: লেভেল ২)");
-    if (newLevel) await updateDoc(doc(db, "children", lvl.dataset.level), { level: newLevel });
-  }
   const receiptBtn = e.target.closest("[data-receipt]");
   if (receiptBtn) openReceipt(receiptBtn.dataset.receipt);
+
+  const resend = e.target.closest("[data-resend-reset]");
+  if (resend) {
+    const email = resend.dataset.resendReset;
+    if (!email) { toast("এই গার্ডিয়ানের ইমেইল পাওয়া যায়নি"); return; }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      toast("রিসেট লিংক পাঠানো হয়েছে — গার্ডিয়ানকে Spam/Junk ফোল্ডার চেক করতে বলুন");
+    } catch (err) {
+      toast("পাঠাতে সমস্যা হয়েছে: " + err.message);
+    }
+  }
 });
 
 /* ---------------- RECEIPT (image / PDF / share) ---------------- */

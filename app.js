@@ -1,10 +1,10 @@
 // js/app.js
 import { auth, db } from "./firebase-config.js";
 import {
-  createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  doc, getDoc, setDoc, addDoc, collection, query, where, orderBy,
+  doc, getDoc, setDoc, updateDoc, addDoc, collection, query, where, orderBy,
   onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -37,8 +37,14 @@ function toast(msg) {
 /* ---------------------------------------------------------
    AUTH: EMAIL + PASSWORD (LOGIN) — fully free on Spark plan
 --------------------------------------------------------- */
-function normalizePhone(v) {
-  return v.trim().replace(/\s|-/g, "");
+function normalizeWhatsapp(v) {
+  let s = (v || "").trim().replace(/[\s-]/g, "");
+  if (!s) return s;
+  if (s.startsWith("+880")) return s;
+  if (s.startsWith("880")) return "+" + s;
+  if (s.startsWith("0")) return "+880" + s.slice(1);
+  if (s.startsWith("+")) return s;
+  return "+880" + s;
 }
 
 document.getElementById("btnLogin").addEventListener("click", async () => {
@@ -60,7 +66,7 @@ document.getElementById("goForgotPw").addEventListener("click", async () => {
   if (!email) { toast("প্রথমে ইমেইল লিখুন"); return; }
   try {
     await sendPasswordResetEmail(auth, email);
-    toast("পাসওয়ার্ড রিসেট লিংক ইমেইলে পাঠানো হয়েছে");
+    toast("রিসেট লিংক ইমেইলে পাঠানো হয়েছে — ইনবক্সে না পেলে Spam/Junk ফোল্ডার চেক করুন");
   } catch (err) {
     toast("সমস্যা হয়েছে: " + err.message);
   }
@@ -97,7 +103,7 @@ document.getElementById("btnRegisterSubmit").addEventListener("click", async () 
   }
   document.getElementById("dobErr").textContent = "";
 
-  const whatsapp = normalizePhone(document.getElementById("regWhatsapp").value);
+  const whatsapp = normalizeWhatsapp(document.getElementById("regWhatsapp").value);
   const email = document.getElementById("regEmail").value.trim();
   const password = document.getElementById("regPassword").value;
 
@@ -108,6 +114,8 @@ document.getElementById("btnRegisterSubmit").addEventListener("click", async () 
     relation: document.getElementById("regRelation").value,
     guardianName: document.getElementById("regGuardianName").value.trim(),
     otherParentName: document.getElementById("regOtherParentName").value.trim(),
+    fatherOccupation: document.getElementById("regFatherOccupation").value.trim(),
+    motherOccupation: document.getElementById("regMotherOccupation").value.trim(),
     whatsapp,
     email,
     currentAddress: document.getElementById("regCurrentAddress").value.trim(),
@@ -130,6 +138,8 @@ document.getElementById("btnRegisterSubmit").addEventListener("click", async () 
       guardianName: registration.guardianName,
       relation: registration.relation,
       otherParentName: registration.otherParentName,
+      fatherOccupation: registration.fatherOccupation,
+      motherOccupation: registration.motherOccupation,
       whatsapp: registration.whatsapp,
       email: registration.email,
       currentAddress: registration.currentAddress,
@@ -169,7 +179,6 @@ async function loadGuardianAndEnter(uid) {
   document.getElementById("bottomNav").style.display = "flex";
 
   if (currentGuardianData) {
-    document.getElementById("guardianGreetName").textContent = currentGuardianData.guardianName;
     document.getElementById("greetTitle").textContent = "সালাম, " + currentGuardianData.guardianName;
     updatePremiumUI(currentGuardianData.isPremium);
   }
@@ -177,6 +186,19 @@ async function loadGuardianAndEnter(uid) {
   showScreen("screen-dashboard");
   watchPaymentRequests();
   watchMyOrders();
+  loadMyChild();
+}
+
+function resetToLoggedOut() {
+  currentGuardianUid = null;
+  currentGuardianData = null;
+  currentChildId = null;
+  currentChildData = null;
+  document.getElementById("topbar").style.display = "none";
+  document.getElementById("bottomNav").style.display = "none";
+  document.getElementById("loginEmail").value = "";
+  document.getElementById("loginPassword").value = "";
+  showScreen("screen-login");
 }
 
 function updatePremiumUI(isPremium) {
@@ -194,6 +216,38 @@ function updatePremiumUI(isPremium) {
 document.getElementById("btnGoPremium").addEventListener("click", () => showScreen("screen-premium"));
 
 /* ---------------------------------------------------------
+   PROFILE + LOGOUT
+--------------------------------------------------------- */
+document.getElementById("btnProfile").addEventListener("click", () => {
+  if (!currentGuardianData) return;
+  document.getElementById("profGuardianName").value = currentGuardianData.guardianName || "";
+  document.getElementById("profWhatsapp").value = currentGuardianData.whatsapp || "";
+  document.getElementById("profEmail").value = currentGuardianData.email || "";
+  document.getElementById("profCurrentAddress").value = currentGuardianData.currentAddress || "";
+  document.getElementById("profPermanentAddress").value = currentGuardianData.permanentAddress || "";
+  showScreen("screen-profile");
+});
+
+document.getElementById("btnSaveProfile").addEventListener("click", async () => {
+  if (!currentGuardianUid) return;
+  const updated = {
+    guardianName: document.getElementById("profGuardianName").value.trim(),
+    whatsapp: normalizeWhatsapp(document.getElementById("profWhatsapp").value),
+    currentAddress: document.getElementById("profCurrentAddress").value.trim(),
+    permanentAddress: document.getElementById("profPermanentAddress").value.trim(),
+  };
+  await updateDoc(doc(db, "guardians", currentGuardianUid), updated);
+  currentGuardianData = { ...currentGuardianData, ...updated };
+  document.getElementById("greetTitle").textContent = "সালাম, " + updated.guardianName;
+  toast("প্রোফাইল আপডেট হয়েছে");
+});
+
+document.getElementById("btnLogout").addEventListener("click", async () => {
+  await signOut(auth);
+  resetToLoggedOut();
+});
+
+/* ---------------------------------------------------------
    CONTENT: ACTIVITIES / POEMS / STORIES / TOOLS / KNOW-KIDS
 --------------------------------------------------------- */
 function renderCard(item, kind) {
@@ -206,12 +260,15 @@ function renderCard(item, kind) {
   if (kind === "activity") {
     metaLine = item.developmentArea || "";
     actionsHtml = `<button data-detail="activity" data-id="${item.id}">বিস্তারিত দেখুন</button>`;
-  } else if (kind === "poem") {
-    metaLine = item.poet ? "কবি: " + item.poet : "";
-    actionsHtml = `<button data-detail="poem" data-id="${item.id}">দেখুন</button>`;
-  } else if (kind === "story") {
-    metaLine = item.author ? "লেখক: " + item.author : "";
-    actionsHtml = `<button data-detail="story" data-id="${item.id}">দেখুন</button>`;
+  } else {
+    const refLabel = { poem: "কবি", story: "লেখক", manner: "রেফারেন্স", dua: "রেফারেন্স" }[kind] || "রেফারেন্স";
+    const refValue = item.author || item.reference || "";
+    metaLine = refValue ? `${refLabel}: ${refValue}` : "";
+    if (locked) {
+      actionsHtml = `<button data-locked-link="1">🔒 পড়ুন</button>`;
+    } else {
+      actionsHtml = `<a href="${item.wordpressLink || "#"}" target="_blank" rel="noopener">পড়ুন →</a>`;
+    }
   }
 
   div.innerHTML = `
@@ -243,6 +300,15 @@ function watchCollection(colName, listElId, kind) {
 watchCollection("activities", "activitiesList", "activity");
 watchCollection("poems", "poemsList", "poem");
 watchCollection("stories", "storiesList", "story");
+watchCollection("manners", "mannersList", "manner");
+watchCollection("duas", "duasList", "dua");
+
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-locked-link]")) {
+    toast("এই কনটেন্টটি প্রিমিয়ামে আনলক করুন");
+    showScreen("screen-premium");
+  }
+});
 
 document.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-detail]");
@@ -253,15 +319,11 @@ document.addEventListener("click", (e) => {
   if (locked) { toast("এই কনটেন্টটি প্রিমিয়ামে আনলক করুন"); showScreen("screen-premium"); return; }
 
   let html = `<h2 style="margin-bottom:10px;">${item.title}</h2>`;
-  if (btn.dataset.detail === "activity") {
-    html += `<p><strong>ডেভেলপমেন্ট এরিয়া:</strong> ${item.developmentArea || "-"}</p>`;
-    html += `<div class="rules-box"><strong>খেলার নিয়ম</strong>${item.rules || "-"}</div>`;
-    if (item.imageDriveLink) html += `<p><a href="${item.imageDriveLink}" target="_blank">📷 ছবি দেখুন</a></p>`;
-    if (item.videoYoutubeLink) html += `<p><a href="${item.videoYoutubeLink}" target="_blank">🎬 ভিডিও দেখুন</a></p>`;
-    html += `<button class="btn-primary" id="btnGoToolsFromActivity" data-activity-id="${item.id}" style="margin-top:10px;">এই খেলার টুলস কিনুন</button>`;
-  } else {
-    html += `<p>${item.learningOutcome || ""}</p>`;
-  }
+  html += `<p><strong>ডেভেলপমেন্ট এরিয়া:</strong> ${item.developmentArea || "-"}</p>`;
+  html += `<div class="rules-box"><strong>খেলার নিয়ম</strong>${item.rules || "-"}</div>`;
+  if (item.imageDriveLink) html += `<p><a href="${item.imageDriveLink}" target="_blank">📷 ছবি দেখুন</a></p>`;
+  if (item.videoYoutubeLink) html += `<p><a href="${item.videoYoutubeLink}" target="_blank">🎬 ভিডিও দেখুন</a></p>`;
+  html += `<button class="btn-primary" id="btnGoToolsFromActivity" data-activity-id="${item.id}" style="margin-top:10px;">এই খেলার টুলস কিনুন</button>`;
   document.getElementById("detailModalBody").innerHTML = html;
   document.getElementById("detailModal").classList.add("active");
 });
@@ -282,11 +344,13 @@ document.addEventListener("click", (e) => {
   }
 });
 
-/* Poem / story common rules + know-kids content (single docs under siteContent) */
+/* Poem / story / manner / dua common rules + know-kids content (single docs under siteContent) */
 onSnapshot(doc(db, "siteContent", "rules"), (snap) => {
   const d = snap.data() || {};
   document.getElementById("poemRulesText").textContent = d.poemRules || "এখনো নিয়ম যুক্ত করা হয়নি";
   document.getElementById("storyRulesText").textContent = d.storyRules || "এখনো নিয়ম যুক্ত করা হয়নি";
+  document.getElementById("mannerRulesText").textContent = d.mannerRules || "এখনো নিয়ম যুক্ত করা হয়নি";
+  document.getElementById("duaRulesText").textContent = d.duaRules || "এখনো নিয়ম যুক্ত করা হয়নি";
 });
 onSnapshot(doc(db, "siteContent", "knowKids"), (snap) => {
   const d = snap.data() || {};
@@ -350,7 +414,7 @@ document.getElementById("btnConfirmOrder").addEventListener("click", async () =>
     price: activeOrderTool.price || 0,
     quantity: Number(document.getElementById("orderQty").value) || 1,
     address: document.getElementById("orderAddress").value.trim(),
-    whatsapp: document.getElementById("orderWhatsapp").value.trim(),
+    whatsapp: normalizeWhatsapp(document.getElementById("orderWhatsapp").value.trim()),
     status: "pending",
     createdAt: serverTimestamp(),
   });
@@ -359,19 +423,77 @@ document.getElementById("btnConfirmOrder").addEventListener("click", async () =>
 });
 
 /* ---------------------------------------------------------
-   SHISHU MELA
+   শিশুর অগ্রগতি রিপোর্ট (5 categories)
 --------------------------------------------------------- */
-onSnapshot(query(collection(db, "children"), where("level", "!=", null)), (snap) => {
-  const listEl = document.getElementById("melaList");
-  listEl.innerHTML = "";
-  if (snap.empty) { listEl.innerHTML = `<div class="empty-state"><div class="e">🏅</div>এখনো কোনো শিশু তালিকাভুক্ত হয়নি</div>`; return; }
-  snap.forEach(docSnap => {
-    const c = docSnap.data();
-    const div = document.createElement("div");
-    div.className = "content-card";
-    div.innerHTML = `<h3>${c.name}</h3><div class="meta">লেভেল: ${c.level || "শুরু"}</div>`;
-    listEl.appendChild(div);
+let currentChildId = null;
+let currentChildData = null;
+
+const PROGRESS_CATEGORIES = [
+  { key: "activity", label: "এক্টিভিটি" },
+  { key: "poem", label: "কবিতা" },
+  { key: "story", label: "গল্প" },
+  { key: "manner", label: "আদব শিষ্টাচার" },
+  { key: "dua", label: "সূরা ও দুআ" },
+];
+
+function loadMyChild() {
+  if (!currentGuardianUid) return;
+  const q = query(collection(db, "children"), where("guardianUid", "==", currentGuardianUid));
+  onSnapshot(q, (snap) => {
+    if (snap.empty) return;
+    const d = snap.docs[0];
+    currentChildId = d.id;
+    currentChildData = d.data();
+    watchMyProgress();
   });
+}
+
+function watchMyProgress() {
+  if (!currentChildId) return;
+  onSnapshot(doc(db, "childProgress", currentChildId), (snap) => {
+    renderProgressForm(snap.exists() ? snap.data() : {});
+  });
+}
+
+function renderProgressForm(data) {
+  const container = document.getElementById("progressCategories");
+  container.innerHTML = PROGRESS_CATEGORIES.map(cat => {
+    const entry = data[cat.key] || {};
+    const percent = entry.percent || 0;
+    const note = entry.note || "";
+    return `
+      <div class="progress-card">
+        <div class="ptitle">${cat.label}</div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${percent}%"></div></div>
+        <div class="prow">
+          <input type="range" min="0" max="100" value="${percent}" data-range="${cat.key}">
+          <span class="pval" data-val="${cat.key}">${percent}%</span>
+        </div>
+        <textarea placeholder="সংক্ষিপ্ত নোট (ঐচ্ছিক)" data-note="${cat.key}">${note}</textarea>
+        <button class="btn-primary" style="margin-top:8px;" data-save-progress="${cat.key}">আপডেট করুন</button>
+      </div>`;
+  }).join("");
+}
+
+document.addEventListener("input", (e) => {
+  const r = e.target.closest("[data-range]");
+  if (!r) return;
+  const key = r.dataset.range;
+  document.querySelector(`[data-val="${key}"]`).textContent = r.value + "%";
+  r.closest(".progress-card").querySelector(".progress-bar-fill").style.width = r.value + "%";
+});
+
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-save-progress]");
+  if (!btn || !currentChildId) return;
+  const key = btn.dataset.saveProgress;
+  const card = btn.closest(".progress-card");
+  const percent = Number(card.querySelector(`[data-range="${key}"]`).value);
+  const note = card.querySelector(`[data-note="${key}"]`).value.trim();
+  await setDoc(doc(db, "childProgress", currentChildId), {
+    [key]: { percent, note, updatedAt: serverTimestamp() }
+  }, { merge: true });
+  toast("অগ্রগতি আপডেট হয়েছে");
 });
 
 /* ---------------------------------------------------------

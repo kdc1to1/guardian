@@ -12,7 +12,7 @@
   <!-- ============ ADMIN LOGIN ============ -->
   <section class="screen active" id="admin-login" style="max-width:420px;margin:60px auto;padding:0 20px;">
     <div class="auth-hero">
-      <div class="brand-badge" style="margin-bottom:14px;">K</div>
+      <img src="logo.png" alt="KDC" class="login-logo">
       <h1 class="display">অ্যাডমিন প্যানেল</h1>
       <p>Kids Development Center — কনটেন্ট ও পেমেন্ট ম্যানেজমেন্ট</p>
     </div>
@@ -26,7 +26,7 @@
   <div class="admin-layout hidden" id="adminShell">
     <div class="admin-sidebar">
       <div class="brand">
-        <div class="brand-badge">K</div>
+        <img src="logo.png" alt="KDC" class="brand-badge-img">
         <div class="brand-name">KDC<strong>অ্যাডমিন</strong></div>
       </div>
       <nav>
@@ -34,11 +34,14 @@
         <button data-go="a-activities">গেইম/এক্টিভিটি</button>
         <button data-go="a-poems">কবিতা</button>
         <button data-go="a-stories">গল্প</button>
+        <button data-go="a-manners">আদব শিষ্টাচার</button>
+        <button data-go="a-duas">সূরা ও দুআ</button>
         <button data-go="a-siterules">নিয়মাবলী ও শিশুদের জানুন</button>
         <button data-go="a-tools">খেলার টুলস</button>
         <button data-go="a-orders">অর্ডার</button>
         <button data-go="a-payments">পেমেন্ট রিকুয়েস্ট</button>
-        <button data-go="a-children">শিশু মেলা</button>
+        <button data-go="a-guardians">গার্ডিয়ানস</button>
+        <button data-go="a-children">অগ্রগতি রিপোর্ট</button>
       </nav>
       <button class="btn-secondary" id="btnAdminLogout" style="margin-top:26px; color:#fff; border-color:#556;">লগআউট</button>
     </div>
@@ -69,7 +72,7 @@
         <div class="admin-form-grid">
           <div class="field"><label>কবিতার নাম</label><input id="poemTitle"></div>
           <div class="field"><label>কবি</label><input id="poemPoet"></div>
-          <div class="field full"><label>শিখন ফল</label><textarea id="poemOutcome"></textarea></div>
+          <div class="field full"><label>ওয়ার্ডপ্রেস লিংক (কবিতাটি পড়ার জন্য)</label><input id="poemLink"></div>
           <div class="field"><label>ফ্রি কনটেন্ট?</label><select id="poemFree"><option value="false">না, পেইড</option><option value="true">হ্যাঁ, ফ্রি</option></select></div>
           <div class="field full"><button class="btn-primary" id="btnAddPoem">যুক্ত করুন</button></div>
         </div>
@@ -81,11 +84,35 @@
         <div class="admin-form-grid">
           <div class="field"><label>গল্পের নাম</label><input id="storyTitle"></div>
           <div class="field"><label>লেখক</label><input id="storyAuthor"></div>
-          <div class="field full"><label>শিখন ফল</label><textarea id="storyOutcome"></textarea></div>
+          <div class="field full"><label>ওয়ার্ডপ্রেস লিংক (গল্পটি পড়ার জন্য)</label><input id="storyLink"></div>
           <div class="field"><label>ফ্রি কনটেন্ট?</label><select id="storyFree"><option value="false">না, পেইড</option><option value="true">হ্যাঁ, ফ্রি</option></select></div>
           <div class="field full"><button class="btn-primary" id="btnAddStory">যুক্ত করুন</button></div>
         </div>
         <table class="admin-table" id="tblStories"><thead><tr><th>নাম</th><th>লেখক</th><th>ফ্রি</th><th></th></tr></thead><tbody></tbody></table>
+      </section>
+
+      <section class="screen" id="a-manners">
+        <div class="admin-topline"><h2>আদব শিষ্টাচার</h2></div>
+        <div class="admin-form-grid">
+          <div class="field"><label>শিরোনাম</label><input id="mannerTitle"></div>
+          <div class="field"><label>রেফারেন্স (ঐচ্ছিক)</label><input id="mannerAuthor"></div>
+          <div class="field full"><label>ওয়ার্ডপ্রেস লিংক</label><input id="mannerLink"></div>
+          <div class="field"><label>ফ্রি কনটেন্ট?</label><select id="mannerFree"><option value="false">না, পেইড</option><option value="true">হ্যাঁ, ফ্রি</option></select></div>
+          <div class="field full"><button class="btn-primary" id="btnAddManner">যুক্ত করুন</button></div>
+        </div>
+        <table class="admin-table" id="tblManners"><thead><tr><th>শিরোনাম</th><th>রেফারেন্স</th><th>ফ্রি</th><th></th></tr></thead><tbody></tbody></table>
+      </section>
+
+      <section class="screen" id="a-duas">
+        <div class="admin-topline"><h2>সূরা ও দুআ</h2></div>
+        <div class="admin-form-grid">
+          <div class="field"><label>শিরোনাম</label><input id="duaTitle"></div>
+          <div class="field"><label>রেফারেন্স (ঐচ্ছিক)</label><input id="duaAuthor"></div>
+          <div class="field full"><label>ওয়ার্ডপ্রেস লিংক</label><input id="duaLink"></div>
+          <div class="field"><label>ফ্রি কনটেন্ট?</label><select id="duaFree"><option value="false">না, পেইড</option><option value="true">হ্যাঁ, ফ্রি</option></select></div>
+          <div class="field full"><button class="btn-primary" id="btnAddDua">যুক্ত করুন</button></div>
+        </div>
+        <table class="admin-table" id="tblDuas"><thead><tr><th>শিরোনাম</th><th>রেফারেন্স</th><th>ফ্রি</th><th></th></tr></thead><tbody></tbody></table>
       </section>
 
       <section class="screen" id="a-siterules">
@@ -93,6 +120,8 @@
         <div class="admin-form-grid">
           <div class="field full"><label>কবিতা বলার নিয়মাবলী (কমন)</label><textarea id="ruleaPoem"></textarea></div>
           <div class="field full"><label>গল্প বলার নিয়মাবলী (কমন)</label><textarea id="ruleaStory"></textarea></div>
+          <div class="field full"><label>আদব শিষ্টাচারের সাধারণ নিয়মাবলী</label><textarea id="ruleaManner"></textarea></div>
+          <div class="field full"><label>সূরা ও দুআর সাধারণ নিয়মাবলী</label><textarea id="ruleaDua"></textarea></div>
           <div class="field full"><button class="btn-primary" id="btnSaveRules">নিয়মাবলী সেভ করুন</button></div>
         </div>
         <div class="admin-form-grid">
@@ -126,9 +155,15 @@
         <table class="admin-table" id="tblPayments"><thead><tr><th>মাধ্যম</th><th>ট্রানজেকশন আইডি</th><th>স্ট্যাটাস</th><th></th></tr></thead><tbody></tbody></table>
       </section>
 
+      <section class="screen" id="a-guardians">
+        <div class="admin-topline"><h2>গার্ডিয়ানস</h2></div>
+        <p style="font-size:13px; color:var(--ink-soft); margin:0 0 14px;">কেউ পাসওয়ার্ড ভুলে গিয়ে ফেসবুকে যোগাযোগ করলে, এখান থেকে তার ইমেইলে আবার রিসেট লিংক পাঠাতে পারবেন।</p>
+        <table class="admin-table" id="tblGuardians"><thead><tr><th>নাম</th><th>ইমেইল</th><th>হোয়াটসএপ</th><th>প্রিমিয়াম</th><th></th></tr></thead><tbody></tbody></table>
+      </section>
+
       <section class="screen" id="a-children">
-        <div class="admin-topline"><h2>শিশু মেলা — শিশুদের তালিকা ও অগ্রগতি</h2></div>
-        <table class="admin-table" id="tblChildren"><thead><tr><th>নাম</th><th>জন্ম তারিখ</th><th>লেভেল</th><th>অভিভাবক</th><th></th></tr></thead><tbody></tbody></table>
+        <div class="admin-topline"><h2>শিশুর অগ্রগতি রিপোর্ট — সব শিশু</h2></div>
+        <table class="admin-table" id="tblChildren"><thead><tr><th>নাম</th><th>জন্ম তারিখ</th><th>এক্টিভিটি</th><th>কবিতা</th><th>গল্প</th><th>আদব</th><th>দুআ</th></tr></thead><tbody></tbody></table>
       </section>
 
     </div>
