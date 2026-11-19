@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="app">
+<div id="app" class="booting">
 
   <!-- ================= TOPBAR ================= -->
   <div class="topbar" id="topbar" style="display:none;">
@@ -239,18 +239,35 @@
   <!-- ================= শিশুর অগ্রগতি রিপোর্ট ================= -->
   <section class="screen" id="screen-mela">
     <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>শিশুর অগ্রগতি রিপোর্ট</h2></div>
-    <p style="font-size:13px; color:var(--ink-soft); margin:0 0 16px;">প্রতিটি ক্যাটাগরিতে আপনার শিশুর অগ্রগতি (%) ও একটি সংক্ষিপ্ত নোট আপডেট করুন।</p>
+    <p style="font-size:13px; color:var(--ink-soft); margin:0 0 16px;">প্রতিটি কনটেন্টের পাশের "📝 রিপোর্ট দিন" বাটন থেকে সেই কনটেন্টের অগ্রগতি জানান। এখানে ক্যাটাগরি অনুযায়ী পুরো সারাংশ দেখা যাবে।</p>
     <div id="progressCategories"></div>
   </section>
 
   <!-- ================= PROFILE ================= -->
   <section class="screen" id="screen-profile">
-    <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>প্রোফাইল</h2></div>
-    <div class="field"><label>অভিভাবকের নাম</label><input id="profGuardianName" type="text"></div>
+    <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>প্রোফাইল এডিট</h2></div>
+    <p style="font-size:13px; color:var(--ink-soft); margin:0 0 14px;">তথ্য বদলে নিচের "সংরক্ষণ করুন" বাটনে চাপুন। লগআউট না করলে বারবার ইমেইল-পাসওয়ার্ড দিতে হবে না।</p>
+
+    <div class="field"><label id="profGuardianNameLabel">অভিভাবকের নাম</label><input id="profGuardianName" type="text"></div>
+    <div class="field"><label id="profOtherParentLabel">অপর অভিভাবকের নাম</label><input id="profOtherParentName" type="text"></div>
+    <div class="field-row">
+      <div class="field"><label>বাবার পেশা</label><input id="profFatherOccupation" type="text"></div>
+      <div class="field"><label>মায়ের পেশা</label><input id="profMotherOccupation" type="text"></div>
+    </div>
     <div class="field"><label>হোয়াটসএপ নাম্বার</label><input id="profWhatsapp" type="tel"></div>
-    <div class="field"><label>ইমেইল</label><input id="profEmail" type="email" disabled></div>
+    <div class="field"><label>ইমেইল (পরিবর্তনযোগ্য নয়)</label><input id="profEmail" type="email" disabled></div>
     <div class="field"><label>বর্তমান ঠিকানা</label><textarea id="profCurrentAddress"></textarea></div>
     <div class="field"><label>স্থায়ী ঠিকানা</label><textarea id="profPermanentAddress"></textarea></div>
+
+    <h3 style="margin:18px 0 10px; font-size:16px;">শিশুর তথ্য</h3>
+    <div class="field"><label>শিশুর নাম</label><input id="profChildName" type="text"></div>
+    <div class="field-row">
+      <div class="field"><label>জন্ম তারিখ</label><input id="profChildDob" type="date"></div>
+      <div class="field"><label>লিঙ্গ</label>
+        <select id="profChildGender"><option value="">নির্বাচন করুন</option><option value="male">ছেলে</option><option value="female">মেয়ে</option></select>
+      </div>
+    </div>
+
     <button class="btn-primary" id="btnSaveProfile">সংরক্ষণ করুন</button>
     <button class="btn-secondary" id="btnLogout" style="margin-top:14px;">লগআউট</button>
   </section>
@@ -260,7 +277,7 @@
     <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>প্রিমিয়াম ভার্সন</h2></div>
     <div class="rules-box">
       <strong>পেমেন্টের নিয়ম</strong>
-      বিকাশ / নগদ / রকেট / ব্যাংকে পে করুন, তারপর ট্রানজেকশন আইডি দিয়ে রিকুয়েস্ট করুন। এডমিন যাচাই করে অ্যাপ্রুভ করলেই সব কনটেন্ট আনলক হবে।
+      বিকাশ / নগদ / রকেট / ব্যাংকে পে করুন, তারপর ট্রানজেকশন আইডি ও যে নাম্বার থেকে পেমেন্ট করেছেন সেটি দিয়ে রিকুয়েস্ট করুন। এডমিন যাচাই করে অ্যাপ্রুভ করলেই সব কনটেন্ট আনলক হবে।
     </div>
     <div class="field">
       <label>পেমেন্ট মাধ্যম *</label>
@@ -275,6 +292,11 @@
       <label>ট্রানজেকশন আইডি *</label>
       <input id="payTrxId" type="text">
     </div>
+    <div class="field">
+      <label>যে নাম্বার থেকে পেমেন্ট করেছেন *</label>
+      <input id="payFromNumber" type="tel" placeholder="01XXXXXXXXX">
+      <small class="hint">বিকাশ/নগদ/রকেট নাম্বার বা ব্যাংক একাউন্টের শেষ কয়েক ডিজিট</small>
+    </div>
     <button class="btn-primary" id="btnSubmitPayment">রিকুয়েস্ট পাঠান</button>
     <div id="paymentHistory" style="margin-top:20px;"></div>
   </section>
@@ -285,6 +307,19 @@
     <button data-go="screen-tools" class="nav-btn">🧸<span>টুলস</span></button>
     <button data-go="screen-mela" class="nav-btn">🏅<span>রিপোর্ট</span></button>
     <button data-go="screen-premium" class="nav-btn">⭐<span>প্রিমিয়াম</span></button>
+    <button data-go="screen-profile" class="nav-btn">👤<span>প্রোফাইল</span></button>
+  </div>
+
+  <!-- ================= MODAL: REPORT ================= -->
+  <div class="modal-overlay" id="reportModal">
+    <div class="modal-sheet">
+      <button class="close-x" id="closeReportModal">✕</button>
+      <h3 id="reportModalTitle" style="margin-bottom:12px;"></h3>
+      <div id="reportOptions"></div>
+      <div class="field" style="margin-top:12px;"><label>নোট (ঐচ্ছিক)</label><textarea id="reportNote" placeholder="যেমন: কোন অংশটা পারে না, কেমন আগ্রহ দেখাল..."></textarea></div>
+      <button class="btn-primary" id="btnSaveReport">রিপোর্ট সংরক্ষণ করুন</button>
+      <div id="reportHistory" style="margin-top:14px;"></div>
+    </div>
   </div>
 
   <!-- ================= MODAL: DETAIL ================= -->

@@ -1,17 +1,24 @@
 // js/app.js
 import { auth, db } from "./firebase-config.js";
 import {
-  createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, collection, query, where, orderBy,
-  onSnapshot, serverTimestamp
+  onSnapshot, serverTimestamp, arrayUnion
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  KIND_ORDER, KIND_LABELS, KIND_COLLECTIONS, REPORT_STATUSES,
+  statusInfo, toMillis, fmtDateTime, esc, sortContent, categorySummary
+} from "./shared.js";
+
+let isRegistering = false;
 
 /* ---------------------------------------------------------
    NAVIGATION
 --------------------------------------------------------- */
 function showScreen(id) {
+  if (id === "screen-profile") populateProfile();
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   const el = document.getElementById(id);
   if (el) el.classList.add("active");
@@ -55,7 +62,8 @@ document.getElementById("btnLogin").addEventListener("click", async () => {
   if (!email || !pw) { errEl.textContent = "ইমেইল ও পাসওয়ার্ড দিন"; return; }
   try {
     const result = await signInWithEmailAndPassword(auth, email, pw);
-    await loadGuardianAndEnter(result.user.uid);
+    const ok = await loadGuardianAndEnter(result.user.uid);
+    if (!ok) errEl.textContent = "এই ইমেইলের কোনো গার্ডিয়ান প্রোফাইল পাওয়া যায়নি";
   } catch (err) {
     errEl.textContent = "লগইন ব্যর্থ: ইমেইল বা পাসওয়ার্ড ভুল";
   }
@@ -130,6 +138,7 @@ document.getElementById("btnRegisterSubmit").addEventListener("click", async () 
     return;
   }
 
+  isRegistering = true;
   try {
     const result = await createUserWithEmailAndPassword(auth, email, password);
     const uid = result.user.uid;
@@ -161,6 +170,8 @@ document.getElementById("btnRegisterSubmit").addEventListener("click", async () 
     await loadGuardianAndEnter(uid);
   } catch (err) {
     errEl.textContent = "রেজিস্ট্রেশন ব্যর্থ: " + err.message;
+  } finally {
+    isRegistering = false;
   }
 });
 
@@ -169,40 +180,89 @@ document.getElementById("btnRegisterSubmit").addEventListener("click", async () 
 --------------------------------------------------------- */
 let currentGuardianUid = null;
 let currentGuardianData = null;
+let currentChildId = null;
+let currentChildData = null;
+let enteredUid = null;
+let reportsByKey = {};
+
+function isPremiumUser() {
+  return !!(currentGuardianData && currentGuardianData.isPremium);
+}
 
 async function loadGuardianAndEnter(uid) {
-  currentGuardianUid = uid;
+  if (enteredUid === uid) return true;
+  enteredUid = uid;
   const snap = await getDoc(doc(db, "guardians", uid));
-  currentGuardianData = snap.exists() ? snap.data() : null;
+  if (!snap.exists()) { enteredUid = null; return false; }
+
+  currentGuardianUid = uid;
+  currentGuardianData = snap.data();
 
   document.getElementById("topbar").style.display = "flex";
   document.getElementById("bottomNav").style.display = "flex";
-
-  if (currentGuardianData) {
-    document.getElementById("greetTitle").textContent = "সালাম, " + currentGuardianData.guardianName;
-    updatePremiumUI(currentGuardianData.isPremium);
-  }
-
+  refreshGuardianUI();
   showScreen("screen-dashboard");
+
+  watchGuardianDoc();
   watchPaymentRequests();
   watchMyOrders();
   loadMyChild();
+  watchMyReports();
+  renderAllContent();
+  return true;
+}
+
+function refreshGuardianUI() {
+  if (!currentGuardianData) return;
+  document.getElementById("greetTitle").textContent = "সালাম, " + currentGuardianData.guardianName;
+  updatePremiumUI(currentGuardianData.isPremium);
+}
+
+// প্রিমিয়াম স্ট্যাটাস লাইভ ট্র্যাক করা — অ্যাপ্রুভ হওয়ার সাথে সাথে সব কনটেন্ট আনলক হবে
+function watchGuardianDoc() {
+  onSnapshot(doc(db, "guardians", currentGuardianUid), (snap) => {
+    if (!snap.exists()) return;
+    const wasPremium = isPremiumUser();
+    currentGuardianData = snap.data();
+    refreshGuardianUI();
+    renderAllContent();
+    renderProgressSummary();
+    if (!wasPremium && isPremiumUser()) toast("🎉 আপনার প্রিমিয়াম চালু হয়েছে — সব কনটেন্ট আনলক!");
+  }, (err) => console.error("guardian doc", err));
 }
 
 function resetToLoggedOut() {
+  enteredUid = null;
   currentGuardianUid = null;
   currentGuardianData = null;
   currentChildId = null;
   currentChildData = null;
+  reportsByKey = {};
   document.getElementById("topbar").style.display = "none";
   document.getElementById("bottomNav").style.display = "none";
-  document.getElementById("loginEmail").value = "";
-  document.getElementById("loginPassword").value = "";
-  showScreen("screen-login");
+  const active = document.querySelector(".screen.active");
+  if (!active || !["screen-login", "screen-register"].includes(active.id)) showScreen("screen-login");
 }
 
+// লগইন করা থাকলে রিলোড করলেও আবার আইডি-পাসওয়ার্ড লাগবে না (Firebase সেশন ব্রাউজারে সংরক্ষিত থাকে)
+onAuthStateChanged(auth, async (user) => {
+  try {
+    if (isRegistering) return;
+    if (user) {
+      const ok = await loadGuardianAndEnter(user.uid);
+      if (!ok) showScreen("screen-login");
+    } else {
+      resetToLoggedOut();
+    }
+  } catch (e) {
+    console.error(e);
+  } finally {
+    document.getElementById("app").classList.remove("booting");
+  }
+});
+setTimeout(() => document.getElementById("app").classList.remove("booting"), 4000);
+
 function updatePremiumUI(isPremium) {
-  const banner = document.getElementById("premiumBanner");
   if (isPremium) {
     document.getElementById("premiumTitle").textContent = "প্রিমিয়াম সদস্য ✨";
     document.getElementById("premiumSub").textContent = "সব কনটেন্ট আনলক করা আছে";
@@ -216,93 +276,155 @@ function updatePremiumUI(isPremium) {
 document.getElementById("btnGoPremium").addEventListener("click", () => showScreen("screen-premium"));
 
 /* ---------------------------------------------------------
-   PROFILE + LOGOUT
+   PROFILE (এডিট) + LOGOUT
 --------------------------------------------------------- */
-document.getElementById("btnProfile").addEventListener("click", () => {
+document.getElementById("btnProfile").addEventListener("click", () => showScreen("screen-profile"));
+
+function populateProfile() {
   if (!currentGuardianData) return;
-  document.getElementById("profGuardianName").value = currentGuardianData.guardianName || "";
-  document.getElementById("profWhatsapp").value = currentGuardianData.whatsapp || "";
-  document.getElementById("profEmail").value = currentGuardianData.email || "";
-  document.getElementById("profCurrentAddress").value = currentGuardianData.currentAddress || "";
-  document.getElementById("profPermanentAddress").value = currentGuardianData.permanentAddress || "";
-  showScreen("screen-profile");
-});
+  const g = currentGuardianData;
+  const c = currentChildData || {};
+  const isFather = g.relation === "father";
+  document.getElementById("profGuardianNameLabel").textContent = isFather ? "পিতার নাম (আপনি)" : "মাতার নাম (আপনি)";
+  document.getElementById("profOtherParentLabel").textContent = isFather ? "মাতার নাম" : "পিতার নাম";
+  document.getElementById("profGuardianName").value = g.guardianName || "";
+  document.getElementById("profOtherParentName").value = g.otherParentName || "";
+  document.getElementById("profFatherOccupation").value = g.fatherOccupation || "";
+  document.getElementById("profMotherOccupation").value = g.motherOccupation || "";
+  document.getElementById("profWhatsapp").value = g.whatsapp || "";
+  document.getElementById("profEmail").value = g.email || "";
+  document.getElementById("profCurrentAddress").value = g.currentAddress || "";
+  document.getElementById("profPermanentAddress").value = g.permanentAddress || "";
+  document.getElementById("profChildName").value = c.name || "";
+  document.getElementById("profChildDob").value = c.dob || "";
+  document.getElementById("profChildGender").value = c.gender || "";
+}
 
 document.getElementById("btnSaveProfile").addEventListener("click", async () => {
   if (!currentGuardianUid) return;
+  const guardianName = document.getElementById("profGuardianName").value.trim();
+  const childName = document.getElementById("profChildName").value.trim();
+  const childDob = document.getElementById("profChildDob").value;
+  const childGender = document.getElementById("profChildGender").value;
+  if (!guardianName || !childName) { toast("অভিভাবক ও শিশুর নাম লিখুন"); return; }
+  if (childDob && currentChildData && childDob !== currentChildData.dob && !isChildAgeValid(childDob)) {
+    toast("শিশুর বয়স ৫ বছরের বেশি হলে নিবন্ধন করা যাবে না"); return;
+  }
   const updated = {
-    guardianName: document.getElementById("profGuardianName").value.trim(),
+    guardianName,
+    otherParentName: document.getElementById("profOtherParentName").value.trim(),
+    fatherOccupation: document.getElementById("profFatherOccupation").value.trim(),
+    motherOccupation: document.getElementById("profMotherOccupation").value.trim(),
     whatsapp: normalizeWhatsapp(document.getElementById("profWhatsapp").value),
     currentAddress: document.getElementById("profCurrentAddress").value.trim(),
     permanentAddress: document.getElementById("profPermanentAddress").value.trim(),
   };
-  await updateDoc(doc(db, "guardians", currentGuardianUid), updated);
-  currentGuardianData = { ...currentGuardianData, ...updated };
-  document.getElementById("greetTitle").textContent = "সালাম, " + updated.guardianName;
-  toast("প্রোফাইল আপডেট হয়েছে");
+  try {
+    await updateDoc(doc(db, "guardians", currentGuardianUid), updated);
+    if (currentChildId) {
+      await updateDoc(doc(db, "children", currentChildId), { name: childName, dob: childDob, gender: childGender });
+    }
+    toast("প্রোফাইল আপডেট হয়েছে");
+  } catch (err) {
+    toast("সংরক্ষণ করা যায়নি: " + err.message);
+  }
 });
 
 document.getElementById("btnLogout").addEventListener("click", async () => {
   await signOut(auth);
-  resetToLoggedOut();
+  location.reload(); // পরিষ্কার অবস্থা থেকে শুরু করতে পেজ রিলোড
 });
 
 /* ---------------------------------------------------------
-   CONTENT: ACTIVITIES / POEMS / STORIES / TOOLS / KNOW-KIDS
+   CONTENT: ফ্রি সবসময় উপরে, প্রতিটি কার্ডে রিপোর্ট ও আনলক বাটন
 --------------------------------------------------------- */
-function renderCard(item, kind) {
-  const locked = !item.isFree && !(currentGuardianData && currentGuardianData.isPremium);
+const LIST_IDS = {
+  activity: "activitiesList", poem: "poemsList", story: "storiesList", manner: "mannersList", dua: "duasList",
+};
+const KIND_SCREENS = {
+  activity: "screen-activities", poem: "screen-poems", story: "screen-stories", manner: "screen-manners", dua: "screen-duas",
+};
+const contentByKind = { activity: [], poem: [], story: [], manner: [], dua: [] };
+const contentIndex = {};
+
+function reportKey(kind, id) { return kind + ":" + id; }
+
+function renderCard(item) {
+  const kind = item.kind;
+  const locked = !item.isFree && !isPremiumUser();
+  const report = reportsByKey[reportKey(kind, item.id)];
   const div = document.createElement("div");
   div.className = "content-card" + (locked ? " locked-card" : "");
-  let metaLine = "";
-  let actionsHtml = "";
 
+  let metaLine = "";
   if (kind === "activity") {
-    metaLine = item.developmentArea || "";
-    actionsHtml = `<button data-detail="activity" data-id="${item.id}">বিস্তারিত দেখুন</button>`;
+    metaLine = esc(item.developmentArea || "");
   } else {
-    const refLabel = { poem: "কবি", story: "লেখক", manner: "রেফারেন্স", dua: "রেফারেন্স" }[kind] || "রেফারেন্স";
+    const refLabel = { poem: "কবি", story: "লেখক" }[kind] || "রেফারেন্স";
     const refValue = item.author || item.reference || "";
-    metaLine = refValue ? `${refLabel}: ${refValue}` : "";
-    if (locked) {
-      actionsHtml = `<button data-locked-link="1">🔒 পড়ুন</button>`;
-    } else {
-      actionsHtml = `<a href="${item.wordpressLink || "#"}" target="_blank" rel="noopener">পড়ুন →</a>`;
-    }
+    metaLine = refValue ? `${refLabel}: ${esc(refValue)}` : "";
+  }
+
+  let mainBtn;
+  if (kind === "activity") {
+    mainBtn = locked
+      ? `<button class="btn-dim" data-locked-link="1">🔒 বিস্তারিত</button>`
+      : `<button data-detail="activity" data-id="${item.id}">বিস্তারিত দেখুন</button>`;
+  } else {
+    mainBtn = locked
+      ? `<button class="btn-dim" data-locked-link="1">🔒 পড়ুন</button>`
+      : `<a href="${esc(item.wordpressLink || "#")}" target="_blank" rel="noopener">পড়ুন →</a>`;
+  }
+  const reportBtn = locked
+    ? `<button class="btn-dim" data-locked-link="1">📝 রিপোর্ট 🔒</button>`
+    : `<button data-report="${kind}:${item.id}">📝 ${report ? "রিপোর্ট আপডেট" : "রিপোর্ট দিন"}</button>`;
+  const unlockBtn = locked ? `<button class="btn-unlock" data-go="screen-premium">🔓 আনলক</button>` : "";
+
+  let chip = "";
+  if (report && !locked) {
+    const info = statusInfo(kind, report.status);
+    chip = `<div class="status-chip">✅ ${esc(info ? info.label : "")} · ${fmtDateTime(report.updatedAt)}</div>`;
   }
 
   div.innerHTML = `
     <span class="badge ${locked ? "locked" : "free"}">${locked ? "প্রিমিয়াম" : "ফ্রি"}</span>
-    <h3>${item.title}</h3>
+    <h3>${esc(item.title)}</h3>
     <div class="meta">${metaLine}</div>
-    <div class="actions">${actionsHtml}</div>
+    ${chip}
+    <div class="actions">${mainBtn}${reportBtn}${unlockBtn}</div>
   `;
   return div;
 }
 
-function watchCollection(colName, listElId, kind) {
-  const listEl = document.getElementById(listElId);
-  const q = query(collection(db, colName), orderBy("createdAt", "desc"));
-  onSnapshot(q, (snap) => {
-    listEl.innerHTML = "";
-    if (snap.empty) {
-      listEl.innerHTML = `<div class="empty-state"><div class="e">🗂️</div>এখনো কোনো কনটেন্ট যুক্ত হয়নি</div>`;
-      return;
-    }
-    snap.forEach(docSnap => {
-      const item = { id: docSnap.id, ...docSnap.data() };
-      window.__contentCache = window.__contentCache || {};
-      window.__contentCache[item.id] = item;
-      listEl.appendChild(renderCard(item, kind));
-    });
-  });
+function renderList(kind) {
+  const listEl = document.getElementById(LIST_IDS[kind]);
+  if (!listEl) return;
+  listEl.innerHTML = "";
+  const items = sortContent(contentByKind[kind]);
+  if (!items.length) {
+    listEl.innerHTML = `<div class="empty-state"><div class="e">🗂️</div>এখনো কোনো কনটেন্ট যুক্ত হয়নি</div>`;
+    return;
+  }
+  items.forEach(item => listEl.appendChild(renderCard(item)));
 }
-watchCollection("activities", "activitiesList", "activity");
-watchCollection("poems", "poemsList", "poem");
-watchCollection("stories", "storiesList", "story");
-watchCollection("manners", "mannersList", "manner");
-watchCollection("duas", "duasList", "dua");
 
+function renderAllContent() {
+  KIND_ORDER.forEach(renderList);
+}
+
+KIND_ORDER.forEach(kind => {
+  onSnapshot(collection(db, KIND_COLLECTIONS[kind]), (snap) => {
+    contentByKind[kind] = snap.docs.map(d => {
+      const item = { id: d.id, kind, ...d.data() };
+      contentIndex[d.id] = item;
+      return item;
+    });
+    renderList(kind);
+    renderProgressSummary();
+  }, (err) => console.error(kind, err));
+});
+
+// লক করা কনটেন্টে ক্লিক করলে
 document.addEventListener("click", (e) => {
   if (e.target.closest("[data-locked-link]")) {
     toast("এই কনটেন্টটি প্রিমিয়ামে আনলক করুন");
@@ -313,16 +435,15 @@ document.addEventListener("click", (e) => {
 document.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-detail]");
   if (!btn) return;
-  const item = window.__contentCache[btn.dataset.id];
+  const item = contentIndex[btn.dataset.id];
   if (!item) return;
-  const locked = !item.isFree && !(currentGuardianData && currentGuardianData.isPremium);
-  if (locked) { toast("এই কনটেন্টটি প্রিমিয়ামে আনলক করুন"); showScreen("screen-premium"); return; }
+  if (!item.isFree && !isPremiumUser()) { toast("এই কনটেন্টটি প্রিমিয়ামে আনলক করুন"); showScreen("screen-premium"); return; }
 
-  let html = `<h2 style="margin-bottom:10px;">${item.title}</h2>`;
-  html += `<p><strong>ডেভেলপমেন্ট এরিয়া:</strong> ${item.developmentArea || "-"}</p>`;
-  html += `<div class="rules-box"><strong>খেলার নিয়ম</strong>${item.rules || "-"}</div>`;
-  if (item.imageDriveLink) html += `<p><a href="${item.imageDriveLink}" target="_blank">📷 ছবি দেখুন</a></p>`;
-  if (item.videoYoutubeLink) html += `<p><a href="${item.videoYoutubeLink}" target="_blank">🎬 ভিডিও দেখুন</a></p>`;
+  let html = `<h2 style="margin-bottom:10px;">${esc(item.title)}</h2>`;
+  html += `<p><strong>ডেভেলপমেন্ট এরিয়া:</strong> ${esc(item.developmentArea || "-")}</p>`;
+  html += `<div class="rules-box"><strong>খেলার নিয়ম</strong>${esc(item.rules || "-")}</div>`;
+  if (item.imageDriveLink) html += `<p><a href="${esc(item.imageDriveLink)}" target="_blank" rel="noopener">📷 ছবি দেখুন</a></p>`;
+  if (item.videoYoutubeLink) html += `<p><a href="${esc(item.videoYoutubeLink)}" target="_blank" rel="noopener">🎬 ভিডিও দেখুন</a></p>`;
   html += `<button class="btn-primary" id="btnGoToolsFromActivity" data-activity-id="${item.id}" style="margin-top:10px;">এই খেলার টুলস কিনুন</button>`;
   document.getElementById("detailModalBody").innerHTML = html;
   document.getElementById("detailModal").classList.add("active");
@@ -343,6 +464,83 @@ document.addEventListener("click", (e) => {
     document.getElementById("orderModal").classList.add("active");
   }
 });
+
+/* ---------------------------------------------------------
+   প্রতিটি কনটেন্টের রিপোর্ট ইনপুট (মোডাল)
+--------------------------------------------------------- */
+let activeReport = null; // { kind, id }
+
+function openReportModal(kind, id) {
+  const item = contentIndex[id];
+  if (!item) return;
+  if (!currentChildId) { toast("শিশুর তথ্য লোড হচ্ছে, একটু পরে আবার চেষ্টা করুন"); return; }
+  activeReport = { kind, id };
+  const existing = reportsByKey[reportKey(kind, id)];
+  document.getElementById("reportModalTitle").textContent = `${KIND_LABELS[kind]}: ${item.title}`;
+  document.getElementById("reportOptions").innerHTML = REPORT_STATUSES[kind].map(s => `
+    <label class="report-option">
+      <input type="radio" name="reportStatus" value="${s.key}" ${existing && existing.status === s.key ? "checked" : ""}>
+      <span>${esc(s.label)}</span>
+    </label>`).join("");
+  document.getElementById("reportNote").value = (existing && existing.note) || "";
+  const hist = ((existing && existing.history) || []).slice().sort((a, b) => b.at - a.at);
+  document.getElementById("reportHistory").innerHTML = hist.length
+    ? `<div class="hist-title">আগের রিপোর্টসমূহ</div>` + hist.map(h => {
+        const info = statusInfo(kind, h.status);
+        return `<div class="hist-row">${fmtDateTime(h.at)} — ${esc(info ? info.label : h.status)}${h.note ? " · " + esc(h.note) : ""}</div>`;
+      }).join("")
+    : "";
+  document.getElementById("reportModal").classList.add("active");
+}
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-report]");
+  if (!btn) return;
+  const [kind, id] = btn.dataset.report.split(":");
+  openReportModal(kind, id);
+});
+document.getElementById("closeReportModal").addEventListener("click", () => document.getElementById("reportModal").classList.remove("active"));
+
+document.getElementById("btnSaveReport").addEventListener("click", async () => {
+  if (!activeReport || !currentChildId) return;
+  const picked = document.querySelector('input[name="reportStatus"]:checked');
+  if (!picked) { toast("একটি অবস্থা বেছে নিন"); return; }
+  const { kind, id } = activeReport;
+  const item = contentIndex[id];
+  const info = statusInfo(kind, picked.value);
+  const note = document.getElementById("reportNote").value.trim();
+  try {
+    await setDoc(doc(db, "contentReports", `${currentChildId}_${kind}_${id}`), {
+      guardianUid: currentGuardianUid,
+      childId: currentChildId,
+      kind,
+      contentId: id,
+      contentTitle: item ? item.title : "",
+      status: picked.value,
+      score: info ? info.score : 0,
+      note,
+      updatedAt: serverTimestamp(),
+      history: arrayUnion({ status: picked.value, note, at: Date.now() }),
+    }, { merge: true });
+    document.getElementById("reportModal").classList.remove("active");
+    toast("রিপোর্ট সংরক্ষিত হয়েছে");
+  } catch (err) {
+    toast("রিপোর্ট সংরক্ষণ করা যায়নি: " + err.message);
+  }
+});
+
+function watchMyReports() {
+  const q = query(collection(db, "contentReports"), where("guardianUid", "==", currentGuardianUid));
+  onSnapshot(q, (snap) => {
+    reportsByKey = {};
+    snap.forEach(d => {
+      const r = d.data();
+      reportsByKey[reportKey(r.kind, r.contentId)] = r;
+    });
+    renderAllContent();
+    renderProgressSummary();
+  }, (err) => console.error("reports", err));
+}
 
 /* Poem / story / manner / dua common rules + know-kids content (single docs under siteContent) */
 onSnapshot(doc(db, "siteContent", "rules"), (snap) => {
@@ -423,19 +621,8 @@ document.getElementById("btnConfirmOrder").addEventListener("click", async () =>
 });
 
 /* ---------------------------------------------------------
-   শিশুর অগ্রগতি রিপোর্ট (5 categories)
+   শিশুর অগ্রগতি রিপোর্ট — ক্যাটাগরিভিত্তিক সারাংশ
 --------------------------------------------------------- */
-let currentChildId = null;
-let currentChildData = null;
-
-const PROGRESS_CATEGORIES = [
-  { key: "activity", label: "এক্টিভিটি" },
-  { key: "poem", label: "কবিতা" },
-  { key: "story", label: "গল্প" },
-  { key: "manner", label: "আদব শিষ্টাচার" },
-  { key: "dua", label: "সূরা ও দুআ" },
-];
-
 function loadMyChild() {
   if (!currentGuardianUid) return;
   const q = query(collection(db, "children"), where("guardianUid", "==", currentGuardianUid));
@@ -444,95 +631,100 @@ function loadMyChild() {
     const d = snap.docs[0];
     currentChildId = d.id;
     currentChildData = d.data();
-    watchMyProgress();
-  });
+    renderProgressSummary();
+  }, (err) => console.error("children", err));
 }
 
-function watchMyProgress() {
-  if (!currentChildId) return;
-  onSnapshot(doc(db, "childProgress", currentChildId), (snap) => {
-    renderProgressForm(snap.exists() ? snap.data() : {});
-  });
-}
-
-function renderProgressForm(data) {
+function renderProgressSummary() {
   const container = document.getElementById("progressCategories");
-  container.innerHTML = PROGRESS_CATEGORIES.map(cat => {
-    const entry = data[cat.key] || {};
-    const percent = entry.percent || 0;
-    const note = entry.note || "";
+  if (!container) return;
+  if (!currentGuardianUid) { container.innerHTML = ""; return; }
+
+  const premium = isPremiumUser();
+  let allSum = 0, allTotal = 0, allReported = 0;
+  const cards = KIND_ORDER.map(kind => {
+    const items = contentByKind[kind];
+    const s = categorySummary(kind, items, id => reportsByKey[reportKey(kind, id)], premium);
+    allSum += s.sum; allTotal += s.total; allReported += s.reported;
+
+    const chips = REPORT_STATUSES[kind]
+      .filter(st => s.counts[st.key])
+      .map(st => `<span class="chip">${esc(st.label)}: <b>${s.counts[st.key]}</b></span>`).join("");
+
+    const rows = sortContent(items.filter(i => i.isFree || premium)).map(i => {
+      const r = reportsByKey[reportKey(kind, i.id)];
+      const info = r ? statusInfo(kind, r.status) : null;
+      return `<div class="drow">
+        <div class="dtitle">${esc(i.title)}</div>
+        <div class="dstat">${r ? `${esc(info ? info.label : r.status)}<br><small>${fmtDateTime(r.updatedAt)}${r.note ? " · " + esc(r.note) : ""}</small>` : `<small>— এখনো রিপোর্ট দেওয়া হয়নি</small>`}</div>
+      </div>`;
+    }).join("");
+
     return `
       <div class="progress-card">
-        <div class="ptitle">${cat.label}</div>
-        <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${percent}%"></div></div>
-        <div class="prow">
-          <input type="range" min="0" max="100" value="${percent}" data-range="${cat.key}">
-          <span class="pval" data-val="${cat.key}">${percent}%</span>
-        </div>
-        <textarea placeholder="সংক্ষিপ্ত নোট (ঐচ্ছিক)" data-note="${cat.key}">${note}</textarea>
-        <button class="btn-primary" style="margin-top:8px;" data-save-progress="${cat.key}">আপডেট করুন</button>
+        <div class="prow-head"><span class="ptitle">${KIND_LABELS[kind]}</span><span class="pval">${s.pct}%</span></div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${s.pct}%"></div></div>
+        <div class="psub">রিপোর্ট দেওয়া হয়েছে: <b>${s.reported}</b>/${s.total} টি${s.last ? " · সর্বশেষ: " + fmtDateTime(s.last) : ""}</div>
+        ${chips ? `<div class="chips">${chips}</div>` : ""}
+        ${s.lockedCount ? `<div class="psub">🔒 আরও ${s.lockedCount} টি প্রিমিয়াম কনটেন্ট আছে — <a href="#" data-go="screen-premium">আনলক করুন</a></div>` : ""}
+        ${rows ? `<details><summary>কনটেন্ট অনুযায়ী বিস্তারিত</summary>${rows}</details>` : ""}
+        <button class="btn-secondary small" data-go="${KIND_SCREENS[kind]}">${KIND_LABELS[kind]}-এর কনটেন্টে যান (রিপোর্ট দিন)</button>
       </div>`;
-  }).join("");
+  });
+
+  const overall = allTotal ? Math.round(allSum / allTotal) : 0;
+  const childName = currentChildData ? esc(currentChildData.name) : "";
+  container.innerHTML = `
+    <div class="progress-card overall">
+      <div class="prow-head"><span class="ptitle">${childName ? childName + " — " : ""}সার্বিক অগ্রগতি</span><span class="pval">${overall}%</span></div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${overall}%"></div></div>
+      <div class="psub">মোট ${allTotal} টি কনটেন্টের মধ্যে <b>${allReported}</b> টির রিপোর্ট দেওয়া হয়েছে</div>
+    </div>` + cards.join("");
 }
-
-document.addEventListener("input", (e) => {
-  const r = e.target.closest("[data-range]");
-  if (!r) return;
-  const key = r.dataset.range;
-  document.querySelector(`[data-val="${key}"]`).textContent = r.value + "%";
-  r.closest(".progress-card").querySelector(".progress-bar-fill").style.width = r.value + "%";
-});
-
-document.addEventListener("click", async (e) => {
-  const btn = e.target.closest("[data-save-progress]");
-  if (!btn || !currentChildId) return;
-  const key = btn.dataset.saveProgress;
-  const card = btn.closest(".progress-card");
-  const percent = Number(card.querySelector(`[data-range="${key}"]`).value);
-  const note = card.querySelector(`[data-note="${key}"]`).value.trim();
-  await setDoc(doc(db, "childProgress", currentChildId), {
-    [key]: { percent, note, updatedAt: serverTimestamp() }
-  }, { merge: true });
-  toast("অগ্রগতি আপডেট হয়েছে");
-});
 
 /* ---------------------------------------------------------
    PAYMENT REQUESTS
 --------------------------------------------------------- */
+const PAY_METHOD_LABELS = { bkash: "বিকাশ", nagad: "নগদ", rocket: "রকেট", bank: "ব্যাংক" };
+
 document.getElementById("btnSubmitPayment").addEventListener("click", async () => {
   const trxId = document.getElementById("payTrxId").value.trim();
+  const senderNumber = document.getElementById("payFromNumber").value.trim().replace(/\s/g, "");
   if (!trxId) { toast("ট্রানজেকশন আইডি দিন"); return; }
-  await addDoc(collection(db, "paymentRequests"), {
-    guardianUid: currentGuardianUid,
-    method: document.getElementById("payMethod").value,
-    transactionId: trxId,
-    status: "pending",
-    createdAt: serverTimestamp(),
-  });
-  document.getElementById("payTrxId").value = "";
-  toast("রিকুয়েস্ট পাঠানো হয়েছে, এডমিন যাচাই করবেন");
+  if (!senderNumber) { toast("যে নাম্বার থেকে পেমেন্ট করেছেন সেটি দিন"); return; }
+  try {
+    await addDoc(collection(db, "paymentRequests"), {
+      guardianUid: currentGuardianUid,
+      method: document.getElementById("payMethod").value,
+      transactionId: trxId,
+      senderNumber,
+      status: "pending",
+      createdAt: serverTimestamp(),
+    });
+    document.getElementById("payTrxId").value = "";
+    document.getElementById("payFromNumber").value = "";
+    toast("রিকুয়েস্ট পাঠানো হয়েছে, এডমিন যাচাই করবেন");
+  } catch (err) {
+    toast("রিকুয়েস্ট পাঠানো যায়নি: " + err.message);
+  }
 });
 
 function watchPaymentRequests() {
   if (!currentGuardianUid) return;
-  const q = query(collection(db, "paymentRequests"), where("guardianUid", "==", currentGuardianUid), orderBy("createdAt", "desc"));
+  const q = query(collection(db, "paymentRequests"), where("guardianUid", "==", currentGuardianUid));
   onSnapshot(q, (snap) => {
     const el = document.getElementById("paymentHistory");
     el.innerHTML = "<h3 style='margin-bottom:10px;'>আপনার রিকুয়েস্টসমূহ</h3>";
-    snap.forEach(d => {
-      const r = d.data();
+    const rows = snap.docs.map(d => d.data())
+      .sort((a, b) => (toMillis(b.createdAt) || Date.now()) - (toMillis(a.createdAt) || Date.now()));
+    rows.forEach(r => {
       const pillClass = r.status === "approved" ? "approved" : r.status === "rejected" ? "rejected" : "pending";
       const pillTxt = r.status === "approved" ? "অ্যাপ্রুভড" : r.status === "rejected" ? "বাতিল" : "অপেক্ষমান";
-      el.innerHTML += `<div class="content-card"><div class="meta">${r.method} · ${r.transactionId}</div><span class="pill ${pillClass}">${pillTxt}</span></div>`;
+      el.innerHTML += `<div class="content-card">
+        <div class="meta">${PAY_METHOD_LABELS[r.method] || esc(r.method)} · ট্রানজেকশন: ${esc(r.transactionId)}<br>পেমেন্টের নাম্বার: ${esc(r.senderNumber || "—")}</div>
+        <span class="pill ${pillClass}">${pillTxt}</span></div>`;
     });
-  });
-  // also refresh premium flag live
-  onSnapshot(doc(db, "guardians", currentGuardianUid), (snap) => {
-    if (snap.exists()) {
-      currentGuardianData = snap.data();
-      updatePremiumUI(currentGuardianData.isPremium);
-    }
-  });
+  }, (err) => console.error("payments", err));
 }
 
 /* ---------------------------------------------------------
@@ -542,12 +734,12 @@ window.__myOrdersCache = window.__myOrdersCache || {};
 
 function watchMyOrders() {
   if (!currentGuardianUid) return;
-  const q = query(collection(db, "orders"), where("guardianUid", "==", currentGuardianUid), orderBy("createdAt", "desc"));
+  const q = query(collection(db, "orders"), where("guardianUid", "==", currentGuardianUid));
   onSnapshot(q, (snap) => {
     const listEl = document.getElementById("myOrdersList");
     listEl.innerHTML = "";
     if (snap.empty) { listEl.innerHTML = `<div class="empty-state"><div class="e">📦</div>এখনো কোনো অর্ডার নেই</div>`; return; }
-    snap.forEach(docSnap => {
+    [...snap.docs].sort((a, b) => (toMillis(b.data().createdAt) || Date.now()) - (toMillis(a.data().createdAt) || Date.now())).forEach(docSnap => {
       const o = { id: docSnap.id, ...docSnap.data() };
       window.__myOrdersCache[o.id] = o;
       const pillClass = o.status === "confirmed" ? "approved" : o.status === "cancelled" ? "rejected" : "pending";

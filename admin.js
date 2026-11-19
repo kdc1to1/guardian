@@ -7,6 +7,9 @@ import {
   doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection,
   query, orderBy, onSnapshot, serverTimestamp, increment
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  KIND_ORDER, KIND_LABELS, statusInfo, toMillis, fmtDateTime, esc, sortContent, categorySummary
+} from "./shared.js";
 
 function toast(msg) {
   const t = document.getElementById("toast");
@@ -37,7 +40,7 @@ document.getElementById("btnAdminLogin").addEventListener("click", async () => {
     document.getElementById("adminLoginErr").textContent = "লগইন ব্যর্থ: " + err.message;
   }
 });
-document.getElementById("btnAdminLogout").addEventListener("click", () => signOut(auth));
+document.getElementById("btnAdminLogout").addEventListener("click", async () => { await signOut(auth); location.reload(); });
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
@@ -49,124 +52,157 @@ onAuthStateChanged(auth, async (user) => {
   if (adminDoc.exists()) enterAdmin();
 });
 
+let adminStarted = false;
 function enterAdmin() {
+  startAdmin(); // লগইন যাচাইয়ের পরেই ডাটা লিসেনার চালু হয় (আগে চালালে permission-denied হতো)
   document.getElementById("admin-login").classList.remove("active");
   document.getElementById("adminShell").classList.remove("hidden");
   showScreen("a-overview");
 }
 
-/* ---------------- helper: generic add ---------------- */
-async function addDocTo(colName, data) {
-  await addDoc(collection(db, colName), { ...data, createdAt: serverTimestamp() });
-  toast("যুক্ত করা হয়েছে");
-}
+
+function startAdmin() {
+  if (adminStarted) return;
+  adminStarted = true;
+
+
+/* ---------------- কনটেন্ট ম্যানেজমেন্ট (যুক্ত / এডিট / মুছুন) ---------------- */
 async function removeDoc(colName, id) {
   if (!confirm("মুছে ফেলতে চান?")) return;
   await deleteDoc(doc(db, colName, id));
 }
 
-/* ---------------- ACTIVITIES ---------------- */
-document.getElementById("btnAddActivity").addEventListener("click", async () => {
-  await addDocTo("activities", {
-    title: document.getElementById("actTitle").value.trim(),
-    developmentArea: document.getElementById("actDevArea").value.trim(),
-    rules: document.getElementById("actRules").value.trim(),
-    imageDriveLink: document.getElementById("actImage").value.trim(),
-    videoYoutubeLink: document.getElementById("actVideo").value.trim(),
-    isFree: document.getElementById("actFree").value === "true",
+const adminContent = { activity: [], poem: [], story: [], manner: [], dua: [] };
+
+const CRUD = [
+  { col: "activities", kind: "activity", btn: "btnAddActivity", table: "tblActivities",
+    fields: { title: "actTitle", developmentArea: "actDevArea", rules: "actRules", imageDriveLink: "actImage", videoYoutubeLink: "actVideo", isFree: "actFree" },
+    cells: ["title", "developmentArea"] },
+  { col: "poems", kind: "poem", btn: "btnAddPoem", table: "tblPoems",
+    fields: { title: "poemTitle", author: "poemPoet", wordpressLink: "poemLink", isFree: "poemFree" },
+    cells: ["title", "author"] },
+  { col: "stories", kind: "story", btn: "btnAddStory", table: "tblStories",
+    fields: { title: "storyTitle", author: "storyAuthor", wordpressLink: "storyLink", isFree: "storyFree" },
+    cells: ["title", "author"] },
+  { col: "manners", kind: "manner", btn: "btnAddManner", table: "tblManners",
+    fields: { title: "mannerTitle", author: "mannerAuthor", wordpressLink: "mannerLink", isFree: "mannerFree" },
+    cells: ["title", "author"] },
+  { col: "duas", kind: "dua", btn: "btnAddDua", table: "tblDuas",
+    fields: { title: "duaTitle", author: "duaAuthor", wordpressLink: "duaLink", isFree: "duaFree" },
+    cells: ["title", "author"] },
+  { col: "tools", kind: null, btn: "btnAddTool", table: "tblTools",
+    fields: { name: "toolName", price: "toolPrice", itemsDetails: "toolItems", materials: "toolMaterials", linkedActivityId: "toolLinkedActivity" },
+    numbers: ["price"], cells: ["name", "price"] },
+];
+
+function readValues(cfg) {
+  const out = {};
+  Object.entries(cfg.fields).forEach(([key, id]) => {
+    let v = document.getElementById(id).value;
+    if (key === "isFree") v = v === "true";
+    else if (cfg.numbers && cfg.numbers.includes(key)) v = Number(v) || 0;
+    else if (key === "linkedActivityId") v = v || null;
+    else v = v.trim();
+    out[key] = v;
   });
-  ["actTitle","actDevArea","actRules","actImage","actVideo"].forEach(id => document.getElementById(id).value = "");
-});
-onSnapshot(query(collection(db, "activities"), orderBy("createdAt", "desc")), (snap) => {
-  const tb = document.querySelector("#tblActivities tbody"); tb.innerHTML = "";
-  const sel = document.getElementById("toolLinkedActivity");
-  const prevValue = sel.value;
-  sel.innerHTML = `<option value="">-- কোনোটার সাথে নয় --</option>`;
-  snap.forEach(d => {
-    const a = d.data();
-    tb.innerHTML += `<tr><td>${a.title}</td><td>${a.developmentArea||""}</td><td>${a.isFree?"ফ্রি":"পেইড"}</td>
-      <td><button class="tiny-btn no" data-del="activities:${d.id}">মুছুন</button></td></tr>`;
-    sel.innerHTML += `<option value="${d.id}">${a.title}</option>`;
+  return out;
+}
+function fillValues(cfg, item) {
+  Object.entries(cfg.fields).forEach(([key, id]) => {
+    const el = document.getElementById(id);
+    if (key === "isFree") el.value = item.isFree ? "true" : "false";
+    else el.value = item[key] == null ? "" : item[key];
   });
-  sel.value = prevValue;
+}
+function clearValues(cfg) {
+  Object.entries(cfg.fields).forEach(([key, id]) => {
+    document.getElementById(id).value = key === "isFree" ? "false" : "";
+  });
+}
+function enterEdit(cfg, id) {
+  const item = cfg.cache[id];
+  if (!item) return;
+  fillValues(cfg, item);
+  cfg.editingId = id;
+  cfg.btnEl.textContent = "আপডেট করুন";
+  cfg.cancelEl.style.display = "block";
+  cfg.btnEl.scrollIntoView({ behavior: "smooth", block: "center" });
+  toast("এডিট মোড — পরিবর্তন করে 'আপডেট করুন' চাপুন");
+}
+function exitEdit(cfg) {
+  clearValues(cfg);
+  cfg.editingId = null;
+  cfg.btnEl.textContent = "যুক্ত করুন";
+  cfg.cancelEl.style.display = "none";
+}
+
+CRUD.forEach(cfg => {
+  cfg.cache = {};
+  cfg.editingId = null;
+  cfg.btnEl = document.getElementById(cfg.btn);
+  cfg.cancelEl = document.createElement("button");
+  cfg.cancelEl.type = "button";
+  cfg.cancelEl.className = "btn-secondary";
+  cfg.cancelEl.style.cssText = "display:none; margin-top:10px;";
+  cfg.cancelEl.textContent = "এডিট বাতিল করুন";
+  cfg.btnEl.insertAdjacentElement("afterend", cfg.cancelEl);
+  cfg.cancelEl.addEventListener("click", () => exitEdit(cfg));
+
+  cfg.btnEl.addEventListener("click", async () => {
+    const data = readValues(cfg);
+    const nameKey = cfg.fields.title ? "title" : "name";
+    if (!data[nameKey]) { toast("শিরোনাম/নাম লিখুন"); return; }
+    try {
+      if (cfg.editingId) {
+        await updateDoc(doc(db, cfg.col, cfg.editingId), { ...data, updatedAt: serverTimestamp() });
+        toast("আপডেট হয়েছে");
+      } else {
+        await addDoc(collection(db, cfg.col), { ...data, createdAt: serverTimestamp() });
+        toast("যুক্ত করা হয়েছে");
+      }
+      exitEdit(cfg);
+    } catch (err) {
+      toast("সমস্যা হয়েছে: " + err.message);
+    }
+  });
+
+  onSnapshot(collection(db, cfg.col), (snap) => {
+    cfg.cache = {};
+    let items = snap.docs.map(d => { const it = { id: d.id, ...d.data() }; cfg.cache[d.id] = it; return it; });
+    items = cfg.kind
+      ? sortContent(items)
+      : items.sort((a, b) => (toMillis(a.createdAt) || Number.MAX_SAFE_INTEGER) - (toMillis(b.createdAt) || Number.MAX_SAFE_INTEGER));
+
+    const tb = document.querySelector(`#${cfg.table} tbody`);
+    tb.innerHTML = items.map(it => {
+      const cells = cfg.cells.map(k => `<td>${k === "price" ? "৳" + esc(it[k]) : esc(it[k] || "")}</td>`).join("");
+      const freeCell = cfg.kind ? `<td>${it.isFree ? "ফ্রি" : "পেইড"}</td>` : "";
+      return `<tr>${cells}${freeCell}<td style="white-space:nowrap;">
+        <button class="tiny-btn ok" data-edit="${cfg.col}:${it.id}">এডিট</button>
+        <button class="tiny-btn no" data-del="${cfg.col}:${it.id}">মুছুন</button></td></tr>`;
+    }).join("");
+
+    if (cfg.kind) {
+      adminContent[cfg.kind] = items;
+      renderChildrenProgressTable();
+    }
+    if (cfg.col === "activities") {
+      const sel = document.getElementById("toolLinkedActivity");
+      const prev = sel.value;
+      sel.innerHTML = `<option value="">-- কোনোটার সাথে নয় --</option>` +
+        items.map(a => `<option value="${a.id}">${esc(a.title)}</option>`).join("");
+      sel.value = prev;
+    }
+  });
 });
 
-/* ---------------- POEMS ---------------- */
-document.getElementById("btnAddPoem").addEventListener("click", async () => {
-  await addDocTo("poems", {
-    title: document.getElementById("poemTitle").value.trim(),
-    author: document.getElementById("poemPoet").value.trim(),
-    wordpressLink: document.getElementById("poemLink").value.trim(),
-    isFree: document.getElementById("poemFree").value === "true",
-  });
-  ["poemTitle","poemPoet","poemLink"].forEach(id => document.getElementById(id).value = "");
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-edit]");
+  if (!b) return;
+  const [col, id] = b.dataset.edit.split(":");
+  const cfg = CRUD.find(c => c.col === col);
+  if (cfg) enterEdit(cfg, id);
 });
-onSnapshot(query(collection(db, "poems"), orderBy("createdAt", "desc")), (snap) => {
-  const tb = document.querySelector("#tblPoems tbody"); tb.innerHTML = "";
-  snap.forEach(d => {
-    const p = d.data();
-    tb.innerHTML += `<tr><td>${p.title}</td><td>${p.author||""}</td><td>${p.isFree?"ফ্রি":"পেইড"}</td>
-      <td><button class="tiny-btn no" data-del="poems:${d.id}">মুছুন</button></td></tr>`;
-  });
-});
-
-/* ---------------- STORIES ---------------- */
-document.getElementById("btnAddStory").addEventListener("click", async () => {
-  await addDocTo("stories", {
-    title: document.getElementById("storyTitle").value.trim(),
-    author: document.getElementById("storyAuthor").value.trim(),
-    wordpressLink: document.getElementById("storyLink").value.trim(),
-    isFree: document.getElementById("storyFree").value === "true",
-  });
-  ["storyTitle","storyAuthor","storyLink"].forEach(id => document.getElementById(id).value = "");
-});
-onSnapshot(query(collection(db, "stories"), orderBy("createdAt", "desc")), (snap) => {
-  const tb = document.querySelector("#tblStories tbody"); tb.innerHTML = "";
-  snap.forEach(d => {
-    const s = d.data();
-    tb.innerHTML += `<tr><td>${s.title}</td><td>${s.author||""}</td><td>${s.isFree?"ফ্রি":"পেইড"}</td>
-      <td><button class="tiny-btn no" data-del="stories:${d.id}">মুছুন</button></td></tr>`;
-  });
-});
-
-/* ---------------- আদব শিষ্টাচার ---------------- */
-document.getElementById("btnAddManner").addEventListener("click", async () => {
-  await addDocTo("manners", {
-    title: document.getElementById("mannerTitle").value.trim(),
-    author: document.getElementById("mannerAuthor").value.trim(),
-    wordpressLink: document.getElementById("mannerLink").value.trim(),
-    isFree: document.getElementById("mannerFree").value === "true",
-  });
-  ["mannerTitle","mannerAuthor","mannerLink"].forEach(id => document.getElementById(id).value = "");
-});
-onSnapshot(query(collection(db, "manners"), orderBy("createdAt", "desc")), (snap) => {
-  const tb = document.querySelector("#tblManners tbody"); tb.innerHTML = "";
-  snap.forEach(d => {
-    const m = d.data();
-    tb.innerHTML += `<tr><td>${m.title}</td><td>${m.author||""}</td><td>${m.isFree?"ফ্রি":"পেইড"}</td>
-      <td><button class="tiny-btn no" data-del="manners:${d.id}">মুছুন</button></td></tr>`;
-  });
-});
-
-/* ---------------- সূরা ও দুআ ---------------- */
-document.getElementById("btnAddDua").addEventListener("click", async () => {
-  await addDocTo("duas", {
-    title: document.getElementById("duaTitle").value.trim(),
-    author: document.getElementById("duaAuthor").value.trim(),
-    wordpressLink: document.getElementById("duaLink").value.trim(),
-    isFree: document.getElementById("duaFree").value === "true",
-  });
-  ["duaTitle","duaAuthor","duaLink"].forEach(id => document.getElementById(id).value = "");
-});
-onSnapshot(query(collection(db, "duas"), orderBy("createdAt", "desc")), (snap) => {
-  const tb = document.querySelector("#tblDuas tbody"); tb.innerHTML = "";
-  snap.forEach(d => {
-    const du = d.data();
-    tb.innerHTML += `<tr><td>${du.title}</td><td>${du.author||""}</td><td>${du.isFree?"ফ্রি":"পেইড"}</td>
-      <td><button class="tiny-btn no" data-del="duas:${d.id}">মুছুন</button></td></tr>`;
-  });
-});
-
 /* ---------------- SITE RULES + KNOW KIDS ---------------- */
 getDoc(doc(db, "siteContent", "rules")).then(s => {
   const d = s.data() || {};
@@ -199,27 +235,6 @@ document.getElementById("btnSaveKnowKids").addEventListener("click", async () =>
   toast("সেভ হয়েছে");
 });
 
-/* ---------------- TOOLS ---------------- */
-document.getElementById("btnAddTool").addEventListener("click", async () => {
-  await addDocTo("tools", {
-    name: document.getElementById("toolName").value.trim(),
-    price: Number(document.getElementById("toolPrice").value) || 0,
-    itemsDetails: document.getElementById("toolItems").value.trim(),
-    materials: document.getElementById("toolMaterials").value.trim(),
-    linkedActivityId: document.getElementById("toolLinkedActivity").value || null,
-  });
-  ["toolName","toolPrice","toolItems","toolMaterials"].forEach(id => document.getElementById(id).value = "");
-  document.getElementById("toolLinkedActivity").value = "";
-});
-onSnapshot(query(collection(db, "tools"), orderBy("createdAt", "desc")), (snap) => {
-  const tb = document.querySelector("#tblTools tbody"); tb.innerHTML = "";
-  snap.forEach(d => {
-    const t = d.data();
-    tb.innerHTML += `<tr><td>${t.name}</td><td>৳${t.price}</td>
-      <td><button class="tiny-btn no" data-del="tools:${d.id}">মুছুন</button></td></tr>`;
-  });
-});
-
 /* ---------------- ORDERS ---------------- */
 window.__ordersCache = window.__ordersCache || {};
 onSnapshot(query(collection(db, "orders"), orderBy("createdAt", "desc")), (snap) => {
@@ -239,63 +254,122 @@ onSnapshot(query(collection(db, "orders"), orderBy("createdAt", "desc")), (snap)
   });
 });
 
+
 /* ---------------- PAYMENT REQUESTS ---------------- */
-onSnapshot(query(collection(db, "paymentRequests"), orderBy("createdAt", "desc")), (snap) => {
-  const tb = document.querySelector("#tblPayments tbody"); tb.innerHTML = "";
-  snap.forEach(d => {
-    const r = d.data();
+const PAY_METHOD_LABELS = { bkash: "বিকাশ", nagad: "নগদ", rocket: "রকেট", bank: "ব্যাংক" };
+let paymentsCache = [];
+
+function renderPayments() {
+  const tb = document.querySelector("#tblPayments tbody");
+  tb.innerHTML = paymentsCache.map(r => {
+    const g = window.__guardiansCache[r.guardianUid];
     const pillClass = r.status === "approved" ? "approved" : r.status === "rejected" ? "rejected" : "pending";
-    tb.innerHTML += `<tr>
-      <td>${r.method}</td><td>${r.transactionId}</td>
-      <td><span class="pill ${pillClass}">${r.status}</span></td>
-      <td>
-        <button class="tiny-btn ok" data-pay-approve="${d.id}:${r.guardianUid}">অ্যাপ্রুভ</button>
-        <button class="tiny-btn no" data-pay-reject="${d.id}">বাতিল</button>
-      </td></tr>`;
-  });
+    const pillTxt = r.status === "approved" ? "অ্যাপ্রুভড" : r.status === "rejected" ? "বাতিল" : "অপেক্ষমান";
+    const actions = r.status === "pending"
+      ? `<button class="tiny-btn ok" data-pay-approve="${r.id}:${r.guardianUid}">অ্যাপ্রুভ</button>
+         <button class="tiny-btn no" data-pay-reject="${r.id}">বাতিল</button>`
+      : "";
+    return `<tr>
+      <td>${PAY_METHOD_LABELS[r.method] || esc(r.method)}</td>
+      <td>${esc(r.transactionId)}</td>
+      <td>${esc(r.senderNumber || "—")}</td>
+      <td>${g ? esc(g.guardianName) + "<br><small>" + esc(g.whatsapp || "") + "</small>" : "—"}</td>
+      <td>${fmtDateTime(r.createdAt)}</td>
+      <td><span class="pill ${pillClass}">${pillTxt}</span></td>
+      <td style="white-space:nowrap;">${actions}</td></tr>`;
+  }).join("");
+}
+window.__guardiansCache = window.__guardiansCache || {};
+onSnapshot(collection(db, "paymentRequests"), (snap) => {
+  paymentsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (toMillis(b.createdAt) || Date.now()) - (toMillis(a.createdAt) || Date.now()));
+  renderPayments();
 });
 
 /* ---------------- গার্ডিয়ানস ---------------- */
-window.__guardiansCache = window.__guardiansCache || {};
-onSnapshot(query(collection(db, "guardians"), orderBy("createdAt", "desc")), (snap) => {
-  const tb = document.querySelector("#tblGuardians tbody"); tb.innerHTML = "";
-  snap.forEach(d => {
-    const g = { id: d.id, ...d.data() };
-    window.__guardiansCache[d.id] = g;
-    tb.innerHTML += `<tr>
-      <td>${g.guardianName || ""}</td><td>${g.email || ""}</td><td>${g.whatsapp || ""}</td>
+onSnapshot(collection(db, "guardians"), (snap) => {
+  const tb = document.querySelector("#tblGuardians tbody");
+  const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (toMillis(b.createdAt) || Date.now()) - (toMillis(a.createdAt) || Date.now()));
+  window.__guardiansCache = {};
+  list.forEach(g => { window.__guardiansCache[g.id] = g; });
+  tb.innerHTML = list.map(g => `<tr>
+      <td>${esc(g.guardianName)}</td><td>${esc(g.email)}</td><td>${esc(g.whatsapp)}</td>
       <td><span class="pill ${g.isPremium ? "approved" : "pending"}">${g.isPremium ? "প্রিমিয়াম" : "ফ্রি"}</span></td>
-      <td><button class="tiny-btn ok" data-resend-reset="${g.email || ""}">রিসেট ইমেইল পাঠান</button></td></tr>`;
-  });
+      <td><button class="tiny-btn ok" data-resend-reset="${esc(g.email)}">রিসেট ইমেইল পাঠান</button></td></tr>`).join("");
+  renderPayments();
+  renderChildrenProgressTable();
 });
 
-/* ---------------- শিশুর অগ্রগতি রিপোর্ট (সব শিশু) ---------------- */
-window.__childrenCache = window.__childrenCache || {};
-window.__progressCache = window.__progressCache || {};
-const PROGRESS_KEYS = ["activity", "poem", "story", "manner", "dua"];
+/* ---------------- শিশুর অগ্রগতি রিপোর্ট (সব শিশু, কনটেন্টভিত্তিক) ---------------- */
+let childrenList = [];
+let reportsByChild = {}; // childId -> { "kind:contentId": report }
+
+function childSummaries(child) {
+  const g = window.__guardiansCache[child.guardianUid];
+  const premium = !!(g && g.isPremium);
+  const reports = reportsByChild[child.id] || {};
+  return KIND_ORDER.map(kind =>
+    categorySummary(kind, adminContent[kind], id => reports[kind + ":" + id], premium));
+}
 
 function renderChildrenProgressTable() {
-  const tb = document.querySelector("#tblChildren tbody"); tb.innerHTML = "";
-  Object.values(window.__childrenCache).forEach(c => {
-    const prog = window.__progressCache[c.id] || {};
-    const cells = PROGRESS_KEYS.map(k => `${(prog[k] && prog[k].percent) || 0}%`);
-    tb.innerHTML += `<tr>
-      <td>${c.name}</td><td>${c.dob || ""}</td>
-      <td>${cells[0]}</td><td>${cells[1]}</td><td>${cells[2]}</td><td>${cells[3]}</td><td>${cells[4]}</td>
-      </tr>`;
-  });
+  const tb = document.querySelector("#tblChildren tbody");
+  if (!tb) return;
+  tb.innerHTML = childrenList.map(c => {
+    const g = window.__guardiansCache[c.guardianUid];
+    const sums = childSummaries(c);
+    const cells = sums.map(s => `<td>${s.reported}/${s.total}<br><b>${s.pct}%</b></td>`).join("");
+    return `<tr>
+      <td>${esc(c.name)}<br><small>${esc(c.dob || "")}</small></td>
+      <td>${g ? esc(g.guardianName) : "—"}<br><small>${g && g.isPremium ? "প্রিমিয়াম" : "ফ্রি"}</small></td>
+      ${cells}
+      <td><button class="tiny-btn ok" data-child-report="${c.id}">বিস্তারিত</button></td></tr>`;
+  }).join("");
 }
-onSnapshot(query(collection(db, "children"), orderBy("createdAt", "desc")), (snap) => {
-  window.__childrenCache = {};
-  snap.forEach(d => { window.__childrenCache[d.id] = { id: d.id, ...d.data() }; });
-  renderChildrenProgressTable();
-});
-onSnapshot(collection(db, "childProgress"), (snap) => {
-  window.__progressCache = {};
-  snap.forEach(d => { window.__progressCache[d.id] = d.data(); });
-  renderChildrenProgressTable();
-});
 
+function openChildReport(childId) {
+  const c = childrenList.find(x => x.id === childId);
+  if (!c) return;
+  const g = window.__guardiansCache[c.guardianUid];
+  const premium = !!(g && g.isPremium);
+  const reports = reportsByChild[childId] || {};
+  let html = `<h2 style="margin-bottom:4px;">${esc(c.name)}</h2>
+    <p style="font-size:13px; color:var(--ink-soft); margin:0 0 14px;">জন্ম তারিখ: ${esc(c.dob || "—")} · অভিভাবক: ${g ? esc(g.guardianName) : "—"} (${g ? esc(g.whatsapp || "") : ""}) · ${premium ? "প্রিমিয়াম" : "ফ্রি"}</p>`;
+  KIND_ORDER.forEach(kind => {
+    const items = sortContent(adminContent[kind]);
+    const s = categorySummary(kind, adminContent[kind], id => reports[kind + ":" + id], premium);
+    html += `<h3 style="margin:16px 0 4px;">${KIND_LABELS[kind]} — ${s.pct}% <small style="font-weight:400;">(${s.reported}/${s.total} টির রিপোর্ট)</small></h3>`;
+    if (!items.length) { html += `<p style="font-size:13px; color:var(--ink-soft);">কোনো কনটেন্ট নেই</p>`; return; }
+    html += items.map(i => {
+      const r = reports[kind + ":" + i.id];
+      const info = r ? statusInfo(kind, r.status) : null;
+      const hist = r && r.history && r.history.length > 1 ? ` · ${r.history.length} বার আপডেট` : "";
+      return `<div style="display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-bottom:1px solid var(--sand-deep); font-size:13px;">
+        <div>${esc(i.title)} ${i.isFree ? "" : "<small>(প্রিমিয়াম)</small>"}</div>
+        <div style="text-align:right; color:var(--ink-soft);">${r ? esc(info ? info.label : r.status) + "<br><small>" + fmtDateTime(r.updatedAt) + hist + (r.note ? " · " + esc(r.note) : "") + "</small>" : "<small>—</small>"}</div>
+      </div>`;
+    }).join("");
+  });
+  document.getElementById("childReportBody").innerHTML = html;
+  document.getElementById("childReportModal").classList.add("active");
+}
+document.getElementById("closeChildReportModal").addEventListener("click", () =>
+  document.getElementById("childReportModal").classList.remove("active"));
+
+onSnapshot(collection(db, "children"), (snap) => {
+  childrenList = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (toMillis(a.createdAt) || Date.now()) - (toMillis(b.createdAt) || Date.now()));
+  renderChildrenProgressTable();
+});
+onSnapshot(collection(db, "contentReports"), (snap) => {
+  reportsByChild = {};
+  snap.forEach(d => {
+    const r = d.data();
+    (reportsByChild[r.childId] = reportsByChild[r.childId] || {})[r.kind + ":" + r.contentId] = r;
+  });
+  renderChildrenProgressTable();
+});
 /* ---------------- DELEGATED CLICK HANDLERS ---------------- */
 document.addEventListener("click", async (e) => {
   const del = e.target.closest("[data-del]");
@@ -312,15 +386,22 @@ document.addEventListener("click", async (e) => {
   const approve = e.target.closest("[data-pay-approve]");
   if (approve) {
     const [id, guardianUid] = approve.dataset.payApprove.split(":");
-    await updateDoc(doc(db, "paymentRequests", id), { status: "approved", reviewedAt: serverTimestamp() });
-    await updateDoc(doc(db, "guardians", guardianUid), { isPremium: true });
-    toast("প্রিমিয়াম আনলক করা হয়েছে");
+    try {
+      await updateDoc(doc(db, "guardians", guardianUid), { isPremium: true });
+      await updateDoc(doc(db, "paymentRequests", id), { status: "approved", reviewedAt: serverTimestamp() });
+      toast("প্রিমিয়াম আনলক করা হয়েছে");
+    } catch (err) {
+      toast("অ্যাপ্রুভ করা যায়নি: " + err.message);
+    }
   }
   const reject = e.target.closest("[data-pay-reject]");
   if (reject) {
     await updateDoc(doc(db, "paymentRequests", reject.dataset.payReject), { status: "rejected", reviewedAt: serverTimestamp() });
     toast("বাতিল করা হয়েছে");
   }
+  const childRep = e.target.closest("[data-child-report]");
+  if (childRep) openChildReport(childRep.dataset.childReport);
+
   const receiptBtn = e.target.closest("[data-receipt]");
   if (receiptBtn) openReceipt(receiptBtn.dataset.receipt);
 
@@ -406,3 +487,5 @@ onSnapshot(query(collection(db, "paymentRequests")), s => {
 onSnapshot(query(collection(db, "orders")), s => {
   document.getElementById("ov-পেন্ডিং অর্ডার").textContent = s.docs.filter(d => d.data().status === "pending").length;
 });
+
+}

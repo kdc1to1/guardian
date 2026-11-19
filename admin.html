@@ -36,7 +36,8 @@
         <button data-go="a-stories">গল্প</button>
         <button data-go="a-manners">আদব শিষ্টাচার</button>
         <button data-go="a-duas">সূরা ও দুআ</button>
-        <button data-go="a-siterules">নিয়মাবলী ও শিশুদের জানুন</button>
+        <button data-go="a-siterules">নিয়মাবলী</button>
+        <button data-go="a-knowkids">শিশুদের জানুন</button>
         <button data-go="a-tools">খেলার টুলস</button>
         <button data-go="a-orders">অর্ডার</button>
         <button data-go="a-payments">পেমেন্ট রিকুয়েস্ট</button>
@@ -116,7 +117,7 @@
       </section>
 
       <section class="screen" id="a-siterules">
-        <div class="admin-topline"><h2>নিয়মাবলী ও "শিশুদের জানুন"</h2></div>
+        <div class="admin-topline"><h2>সাধারণ নিয়মাবলী</h2></div>
         <div class="admin-form-grid">
           <div class="field full"><label>কবিতা বলার নিয়মাবলী (কমন)</label><textarea id="ruleaPoem"></textarea></div>
           <div class="field full"><label>গল্প বলার নিয়মাবলী (কমন)</label><textarea id="ruleaStory"></textarea></div>
@@ -124,8 +125,12 @@
           <div class="field full"><label>সূরা ও দুআর সাধারণ নিয়মাবলী</label><textarea id="ruleaDua"></textarea></div>
           <div class="field full"><button class="btn-primary" id="btnSaveRules">নিয়মাবলী সেভ করুন</button></div>
         </div>
+      </section>
+
+      <section class="screen" id="a-knowkids">
+        <div class="admin-topline"><h2>শিশুদের জানুন</h2></div>
         <div class="admin-form-grid">
-          <div class="field full"><label>মার্কি টেক্সট</label><input id="kkMarquee"></div>
+          <div class="field full"><label>মার্কি টেক্সট (স্ক্রিনে ভেসে ওঠা লেখা)</label><input id="kkMarquee"></div>
           <div class="field"><label>নিবন্ধের শিরোনাম</label><input id="kkTitle"></div>
           <div class="field"><label>ওয়ার্ডপ্রেস লিংক</label><input id="kkLink"></div>
           <div class="field full"><button class="btn-primary" id="btnSaveKnowKids">সেভ করুন</button></div>
@@ -152,7 +157,7 @@
 
       <section class="screen" id="a-payments">
         <div class="admin-topline"><h2>পেমেন্ট রিকুয়েস্ট</h2></div>
-        <table class="admin-table" id="tblPayments"><thead><tr><th>মাধ্যম</th><th>ট্রানজেকশন আইডি</th><th>স্ট্যাটাস</th><th></th></tr></thead><tbody></tbody></table>
+        <table class="admin-table" id="tblPayments"><thead><tr><th>মাধ্যম</th><th>ট্রানজেকশন আইডি</th><th>যে নাম্বার থেকে</th><th>অভিভাবক</th><th>তারিখ</th><th>স্ট্যাটাস</th><th></th></tr></thead><tbody></tbody></table>
       </section>
 
       <section class="screen" id="a-guardians">
@@ -163,13 +168,21 @@
 
       <section class="screen" id="a-children">
         <div class="admin-topline"><h2>শিশুর অগ্রগতি রিপোর্ট — সব শিশু</h2></div>
-        <table class="admin-table" id="tblChildren"><thead><tr><th>নাম</th><th>জন্ম তারিখ</th><th>এক্টিভিটি</th><th>কবিতা</th><th>গল্প</th><th>আদব</th><th>দুআ</th></tr></thead><tbody></tbody></table>
+        <table class="admin-table" id="tblChildren"><thead><tr><th>শিশু</th><th>অভিভাবক</th><th>এক্টিভিটি</th><th>কবিতা</th><th>গল্প</th><th>আদব</th><th>সূরা-দুআ</th><th></th></tr></thead><tbody></tbody></table>
       </section>
 
     </div>
   </div>
 
   <div class="toast" id="toast"></div>
+
+  <!-- ============ CHILD REPORT MODAL ============ -->
+  <div class="modal-overlay" id="childReportModal">
+    <div class="modal-sheet" style="max-width:640px; margin:0 auto;">
+      <button class="close-x" id="closeChildReportModal">✕</button>
+      <div id="childReportBody"></div>
+    </div>
+  </div>
 
   <!-- ============ RECEIPT MODAL ============ -->
   <div class="modal-overlay" id="receiptModal">

@@ -294,8 +294,11 @@ section.screen.active { display: block; }
   padding: 7px 12px; border-radius: var(--radius-pill);
   background: var(--sand-deep); color: var(--ink);
 }
-.content-card.locked-card { opacity: 0.55; }
-.content-card.locked-card .actions a, .content-card.locked-card .actions button { pointer-events: none; }
+.content-card.locked-card h3, .content-card.locked-card .meta { opacity: 0.6; }
+.content-card .actions { flex-wrap: wrap; }
+.content-card .actions .btn-dim { opacity: 0.5; }
+.content-card .actions .btn-unlock { background: var(--coral); color: var(--white); }
+.status-chip { display: inline-block; background: #DFF3EA; color: var(--teal-deep); font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; margin-bottom: 6px; }
 
 .marquee-wrap {
   background: var(--ink);
@@ -431,5 +434,31 @@ body.admin-body #app { max-width: 980px; }
 .progress-card textarea { min-height: 56px; }
 .progress-bar-bg { background: var(--sand-deep); border-radius: 999px; height: 8px; overflow: hidden; margin-bottom: 10px; }
 .progress-bar-fill { background: var(--teal); height: 100%; border-radius: 999px; }
+
+#app.booting .screen { visibility: hidden; }
+
+/* রিপোর্ট মোডাল */
+.report-option { display: flex; align-items: flex-start; gap: 10px; padding: 11px 12px; background: var(--white); border: 1.5px solid var(--line); border-radius: 12px; margin-bottom: 8px; cursor: pointer; font-size: 14.5px; }
+.report-option input { margin-top: 4px; accent-color: var(--coral); }
+.report-option:has(input:checked) { border-color: var(--teal); background: #EAF7F2; }
+.hist-title { font-weight: 700; font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; }
+.hist-row { font-size: 12.5px; color: var(--ink-soft); padding: 5px 0; border-bottom: 1px dashed var(--line); }
+
+/* অগ্রগতি সারাংশ */
+.progress-card .prow-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.progress-card.overall { background: var(--ink); color: var(--white); }
+.progress-card.overall .ptitle { color: var(--sun); }
+.progress-card.overall .pval { color: var(--sun); }
+.progress-card.overall .progress-bar-bg { background: rgba(255,255,255,0.18); }
+.progress-card.overall .progress-bar-fill { background: var(--sun); }
+.progress-card .psub { font-size: 12.5px; color: var(--ink-soft); margin: 6px 0; }
+.progress-card.overall .psub { color: #C9D6CF; }
+.progress-card .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.progress-card .chip { background: var(--sand-deep); border-radius: 999px; padding: 3px 10px; font-size: 12px; }
+.progress-card details { margin: 8px 0; }
+.progress-card summary { cursor: pointer; font-weight: 600; font-size: 13.5px; color: var(--teal-deep); }
+.progress-card .drow { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--sand-deep); font-size: 13px; }
+.progress-card .drow .dstat { text-align: right; color: var(--ink-soft); }
+.btn-secondary.small { padding: 9px 14px; font-size: 13px; margin-top: 6px; }
 
 .hidden { display: none !important; }

@@ -1,38 +1,28 @@
-// sw.js — basic app-shell caching for offline support
-const CACHE_NAME = "kdc-shell-v1";
-const SHELL_FILES = [
-  "./",
-  "./index.html",
-  "./admin.html",
-  "./style.css",
-  "./manifest.json",
-  "./icon-192.png",
-  "./icon-512.png",
-];
+// sw.js — নেটওয়ার্ক-ফার্স্ট: সবসময় সর্বশেষ ভার্সন আনে, অফলাইনে থাকলে ক্যাশ থেকে দেখায়
+const CACHE_NAME = "kdc-shell-v2";
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_FILES))
-  );
-  self.skipWaiting();
-});
+self.addEventListener("install", () => { self.skipWaiting(); });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
   );
   self.clients.claim();
 });
 
-// Network-first for Firebase/API calls, cache-first for the app shell
 self.addEventListener("fetch", (event) => {
-  const url = event.request.url;
-  if (url.includes("firestore.googleapis.com") || url.includes("identitytoolkit")) {
-    return; // never intercept Firebase calls
-  }
+  const req = event.request;
+  const url = req.url;
+  if (req.method !== "GET") return;
+  if (url.includes("firestore.googleapis.com") || url.includes("identitytoolkit") || url.includes("securetoken")) return;
+  if (!url.startsWith(self.location.origin)) return;
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    fetch(req)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(req, copy)).catch(() => {});
+        return res;
+      })
+      .catch(() => caches.match(req))
   );
 });

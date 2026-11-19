@@ -15,8 +15,8 @@ service cloud.firestore {
     // গার্ডিয়ান প্রোফাইল
     match /guardians/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow create: if isOwner(uid);
-      allow update: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid) && request.resource.data.isPremium == false;
+      allow update: if isAdmin() || (isOwner(uid) && request.resource.data.isPremium == resource.data.isPremium);
       allow delete: if isAdmin();
     }
 
@@ -37,10 +37,12 @@ service cloud.firestore {
     match /tools/{id}        { allow read: if true; allow write: if isAdmin(); }
     match /siteContent/{id}  { allow read: if true; allow write: if isAdmin(); }
 
-    // শিশুর অগ্রগতি রিপোর্ট (৫ ক্যাটাগরি) — গার্ডিয়ান নিজের শিশুরটা পড়তে/লিখতে পারবে, এডমিন সবগুলো পড়তে পারবে
-    match /childProgress/{childId} {
-      allow read: if isAdmin() || (isSignedIn() && get(/databases/$(database)/documents/children/$(childId)).data.guardianUid == request.auth.uid);
-      allow write: if isAdmin() || (isSignedIn() && get(/databases/$(database)/documents/children/$(childId)).data.guardianUid == request.auth.uid);
+    // কনটেন্টভিত্তিক অগ্রগতি রিপোর্ট — গার্ডিয়ান নিজের শিশুরটা লিখতে/পড়তে পারবে, এডমিন সবগুলো দেখতে পারবে
+    match /contentReports/{id} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.guardianUid == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.guardianUid == request.auth.uid;
+      allow update: if isAdmin() || (isSignedIn() && resource.data.guardianUid == request.auth.uid && request.resource.data.guardianUid == request.auth.uid);
+      allow delete: if isAdmin();
     }
 
     // পেমেন্ট রিকুয়েস্ট
@@ -55,7 +57,7 @@ service cloud.firestore {
     match /orders/{id} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.guardianUid == request.auth.uid);
       allow create: if isSignedIn() && request.resource.data.guardianUid == request.auth.uid;
-      allow update: if isAdmin() || (isSignedIn() && resource.data.guardianUid == request.auth.uid);
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
