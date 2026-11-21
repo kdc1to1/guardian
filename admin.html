@@ -40,6 +40,7 @@
         <button data-go="a-knowkids">শিশুদের জানুন</button>
         <button data-go="a-tools">খেলার টুলস</button>
         <button data-go="a-orders">অর্ডার</button>
+        <button data-go="a-fees">প্রিমিয়াম ফি</button>
         <button data-go="a-payments">পেমেন্ট রিকুয়েস্ট</button>
         <button data-go="a-guardians">গার্ডিয়ানস</button>
         <button data-go="a-children">অগ্রগতি রিপোর্ট</button>
@@ -52,6 +53,10 @@
       <section class="screen active" id="a-overview">
         <div class="admin-topline"><h2>ওভারভিউ</h2></div>
         <div class="feature-grid" id="overviewGrid" style="grid-template-columns:repeat(4,1fr);"></div>
+        <div class="notice-box" style="margin-top:20px;">
+          <strong>🔒 নিরাপত্তা আপডেটের পর একবার চালান:</strong> আগে যোগ করা কনটেন্টের লিংক/খেলার নিয়ম সবার জন্য খোলা জায়গায় ছিল। নিচের বাটন সেগুলো সুরক্ষিত জায়গায় সরিয়ে দেয় (এরপর শুধু ফ্রি কনটেন্ট বা প্রিমিয়াম সদস্য দেখতে পারবে)। বারবার চালালেও ক্ষতি নেই।
+          <div style="margin-top:10px;"><button class="btn-primary" id="btnMigrateSecrets" style="width:auto; padding:10px 18px;">পুরনো কনটেন্ট সুরক্ষিত জায়গায় সরান</button></div>
+        </div>
       </section>
 
       <section class="screen" id="a-activities">
@@ -155,15 +160,27 @@
         <table class="admin-table" id="tblOrders"><thead><tr><th>টুলস</th><th>পরিমাণ</th><th>ঠিকানা</th><th>হোয়াটসএপ</th><th>স্ট্যাটাস</th><th>রশিদ</th><th></th></tr></thead><tbody></tbody></table>
       </section>
 
+      <section class="screen" id="a-fees">
+        <div class="admin-topline"><h2>প্রিমিয়াম ফি নির্ধারণ</h2></div>
+        <p style="font-size:13px; color:var(--ink-soft); margin:0 0 14px;">এখানে দেওয়া ফি গার্ডিয়ানদের প্রিমিয়াম পেজে মেয়াদ অনুযায়ী দেখানো হবে। ফি পরিবর্তন করলে শুধু নতুন রিকুয়েস্টে প্রভাব পড়বে। ফি খালি/০ রাখলে সেই মেয়াদটি নেওয়া যাবে না।</p>
+        <div class="admin-form-grid">
+          <div class="field"><label>১ বছরের ফি (৳)</label><input type="number" id="feeY1" min="0"></div>
+          <div class="field"><label>২ বছরের ফি (৳)</label><input type="number" id="feeY2" min="0"></div>
+          <div class="field"><label>৩ বছরের ফি (৳)</label><input type="number" id="feeY3" min="0"></div>
+          <div class="field"><label>আজীবনের ফি (৳)</label><input type="number" id="feeLifetime" min="0"></div>
+          <div class="field full"><button class="btn-primary" id="btnSaveFees">ফি সেভ করুন</button></div>
+        </div>
+      </section>
+
       <section class="screen" id="a-payments">
         <div class="admin-topline"><h2>পেমেন্ট রিকুয়েস্ট</h2></div>
-        <table class="admin-table" id="tblPayments"><thead><tr><th>মাধ্যম</th><th>ট্রানজেকশন আইডি</th><th>যে নাম্বার থেকে</th><th>অভিভাবক</th><th>তারিখ</th><th>স্ট্যাটাস</th><th></th></tr></thead><tbody></tbody></table>
+        <table class="admin-table" id="tblPayments"><thead><tr><th>প্ল্যান ও ফি</th><th>মাধ্যম</th><th>ট্রানজেকশন আইডি</th><th>যে নাম্বার থেকে</th><th>অভিভাবক</th><th>তারিখ</th><th>স্ট্যাটাস</th><th></th></tr></thead><tbody></tbody></table>
       </section>
 
       <section class="screen" id="a-guardians">
         <div class="admin-topline"><h2>গার্ডিয়ানস</h2></div>
         <p style="font-size:13px; color:var(--ink-soft); margin:0 0 14px;">কেউ পাসওয়ার্ড ভুলে গিয়ে ফেসবুকে যোগাযোগ করলে, এখান থেকে তার ইমেইলে আবার রিসেট লিংক পাঠাতে পারবেন।</p>
-        <table class="admin-table" id="tblGuardians"><thead><tr><th>নাম</th><th>ইমেইল</th><th>হোয়াটসএপ</th><th>প্রিমিয়াম</th><th></th></tr></thead><tbody></tbody></table>
+        <table class="admin-table" id="tblGuardians"><thead><tr><th>নাম</th><th>ইমেইল</th><th>হোয়াটসএপ</th><th>প্রিমিয়াম</th><th>মেয়াদ</th><th></th></tr></thead><tbody></tbody></table>
       </section>
 
       <section class="screen" id="a-children">

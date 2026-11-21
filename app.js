@@ -9,7 +9,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   KIND_ORDER, KIND_LABELS, KIND_COLLECTIONS, REPORT_STATUSES,
-  statusInfo, toMillis, fmtDateTime, esc, sortContent, categorySummary
+  statusInfo, toMillis, fmtDateTime, esc, sortContent, categorySummary,
+  PREMIUM_PLANS, planInfo, effectivePremium, premiumState, fmtDate, daysLeft, safeUrl
 } from "./shared.js";
 
 let isRegistering = false;
@@ -71,12 +72,17 @@ document.getElementById("btnLogin").addEventListener("click", async () => {
 
 document.getElementById("goForgotPw").addEventListener("click", async () => {
   const email = document.getElementById("loginEmail").value.trim();
-  if (!email) { toast("প্রথমে ইমেইল লিখুন"); return; }
+  const notice = document.getElementById("resetNotice");
+  if (!email) { toast("প্রথমে ইমেইল ঘরে আপনার ইমেইল লিখুন"); return; }
+  notice.style.display = "block";
+  notice.innerHTML = "রিসেট লিংক পাঠানো হচ্ছে...";
   try {
     await sendPasswordResetEmail(auth, email);
-    toast("রিসেট লিংক ইমেইলে পাঠানো হয়েছে — ইনবক্সে না পেলে Spam/Junk ফোল্ডার চেক করুন");
+    notice.innerHTML = `✅ রিসেট লিংক <b>${esc(email)}</b>-এ পাঠানো হয়েছে।<br>
+      📌 ইনবক্সে না পেলে <b>Spam / Junk / Promotions</b> ফোল্ডারও দেখুন — অনেক সময় লিংকটি সেখানেই চলে যায়। ২-৫ মিনিট অপেক্ষা করুন।
+      সেখানে পেলে "Not spam" দিয়ে ইনবক্সে সরিয়ে নিন।`;
   } catch (err) {
-    toast("সমস্যা হয়েছে: " + err.message);
+    notice.innerHTML = "❌ পাঠানো যায়নি: " + esc(err.code === "auth/user-not-found" ? "এই ইমেইলে কোনো একাউন্ট নেই" : err.message);
   }
 });
 
@@ -186,7 +192,7 @@ let enteredUid = null;
 let reportsByKey = {};
 
 function isPremiumUser() {
-  return !!(currentGuardianData && currentGuardianData.isPremium);
+  return effectivePremium(currentGuardianData); // মেয়াদ শেষ হলে স্বয়ংক্রিয়ভাবে false
 }
 
 async function loadGuardianAndEnter(uid) {
@@ -215,7 +221,8 @@ async function loadGuardianAndEnter(uid) {
 function refreshGuardianUI() {
   if (!currentGuardianData) return;
   document.getElementById("greetTitle").textContent = "সালাম, " + currentGuardianData.guardianName;
-  updatePremiumUI(currentGuardianData.isPremium);
+  updatePremiumUI();
+  renderPremiumScreen();
 }
 
 // প্রিমিয়াম স্ট্যাটাস লাইভ ট্র্যাক করা — অ্যাপ্রুভ হওয়ার সাথে সাথে সব কনটেন্ট আনলক হবে
@@ -262,17 +269,42 @@ onAuthStateChanged(auth, async (user) => {
 });
 setTimeout(() => document.getElementById("app").classList.remove("booting"), 4000);
 
-function updatePremiumUI(isPremium) {
-  if (isPremium) {
+function updatePremiumUI() {
+  const state = premiumState(currentGuardianData);
+  const g = currentGuardianData || {};
+  const btn = document.getElementById("btnGoPremium");
+  if (state === "active") {
     document.getElementById("premiumTitle").textContent = "প্রিমিয়াম সদস্য ✨";
-    document.getElementById("premiumSub").textContent = "সব কনটেন্ট আনলক করা আছে";
-    document.getElementById("btnGoPremium").style.display = "none";
+    document.getElementById("premiumSub").textContent = g.premiumUntil
+      ? "সব কনটেন্ট আনলক — মেয়াদ " + fmtDate(g.premiumUntil) + " পর্যন্ত"
+      : "সব কনটেন্ট আনলক — আজীবন";
+    btn.style.display = "none";
+  } else if (state === "expired") {
+    document.getElementById("premiumTitle").textContent = "প্রিমিয়ামের মেয়াদ শেষ হয়েছে";
+    document.getElementById("premiumSub").textContent = "সব কনটেন্ট আবার আনলক করতে রিনিউ করুন";
+    btn.textContent = "রিনিউ করুন";
+    btn.style.display = "block";
   } else {
     document.getElementById("premiumTitle").textContent = "ফ্রি ভার্সন ব্যবহার করছেন";
     document.getElementById("premiumSub").textContent = "সব কনটেন্ট আনলক করতে প্রিমিয়ামে যান";
-    document.getElementById("btnGoPremium").style.display = "block";
+    btn.textContent = "প্রিমিয়াম নিন";
+    btn.style.display = "block";
   }
 }
+
+// অ্যাপ খোলা থাকা অবস্থায় মেয়াদ শেষ হলেও নিজে থেকে লক হয়ে যাবে
+let lastPremiumEffective = null;
+setInterval(() => {
+  if (!currentGuardianData) return;
+  const now = isPremiumUser();
+  if (lastPremiumEffective !== null && now !== lastPremiumEffective) {
+    refreshGuardianUI();
+    renderAllContent();
+    renderProgressSummary();
+    if (!now) toast("আপনার প্রিমিয়ামের মেয়াদ শেষ হয়েছে");
+  }
+  lastPremiumEffective = now;
+}, 30000);
 document.getElementById("btnGoPremium").addEventListener("click", () => showScreen("screen-premium"));
 
 /* ---------------------------------------------------------
@@ -355,6 +387,9 @@ function renderCard(item) {
   const report = reportsByKey[reportKey(kind, item.id)];
   const div = document.createElement("div");
   div.className = "content-card" + (locked ? " locked-card" : "");
+  // ট্যাগ কনটেন্টের নিজের ধরন দেখায় (ফ্রি/প্রিমিয়াম); লক-আনলক আলাদা বিষয় — প্রিমিয়াম সদস্যের জন্য প্রিমিয়াম কনটেন্টও "প্রিমিয়াম" লেখাই থাকে
+  const badgeClass = item.isFree ? "free" : (locked ? "locked" : "premium");
+  const badgeText = item.isFree ? "ফ্রি" : (locked ? "🔒 প্রিমিয়াম" : "প্রিমিয়াম");
 
   let metaLine = "";
   if (kind === "activity") {
@@ -373,7 +408,7 @@ function renderCard(item) {
   } else {
     mainBtn = locked
       ? `<button class="btn-dim" data-locked-link="1">🔒 পড়ুন</button>`
-      : `<a href="${esc(item.wordpressLink || "#")}" target="_blank" rel="noopener">পড়ুন →</a>`;
+      : `<button data-open="${kind}:${item.id}">পড়ুন →</button>`;
   }
   const reportBtn = locked
     ? `<button class="btn-dim" data-locked-link="1">📝 রিপোর্ট 🔒</button>`
@@ -387,7 +422,7 @@ function renderCard(item) {
   }
 
   div.innerHTML = `
-    <span class="badge ${locked ? "locked" : "free"}">${locked ? "প্রিমিয়াম" : "ফ্রি"}</span>
+    <span class="badge ${badgeClass}">${badgeText}</span>
     <h3>${esc(item.title)}</h3>
     <div class="meta">${metaLine}</div>
     ${chip}
@@ -432,21 +467,64 @@ document.addEventListener("click", (e) => {
   }
 });
 
-document.addEventListener("click", (e) => {
+// প্রিমিয়াম কনটেন্টের সুরক্ষিত অংশ (লিংক/নিয়ম) আলাদা কালেকশন থেকে দরকারের সময় আনা হয় —
+// ফায়ারস্টোর রুলস নিশ্চিত করে শুধু ফ্রি কনটেন্ট বা প্রিমিয়াম সদস্যই এগুলো পড়তে পারবে
+const secretCache = {};
+async function getSecret(id) {
+  if (secretCache[id]) return secretCache[id];
+  const snap = await getDoc(doc(db, "contentSecrets", id));
+  let data;
+  if (snap.exists()) data = snap.data();
+  else {
+    // এডমিন এখনো পুরনো কনটেন্ট সরায়নি হলে আগের ফিল্ড থেকে পড়া হয়
+    const it = contentIndex[id] || {};
+    data = { wordpressLink: it.wordpressLink, rules: it.rules, imageDriveLink: it.imageDriveLink, videoYoutubeLink: it.videoYoutubeLink };
+  }
+  secretCache[id] = data;
+  return data;
+}
+
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-open]");
+  if (!btn) return;
+  const id = btn.dataset.open.split(":")[1];
+  const item = contentIndex[id];
+  if (!item) return;
+  if (!item.isFree && !isPremiumUser()) { toast("এই কনটেন্টটি প্রিমিয়ামে আনলক করুন"); showScreen("screen-premium"); return; }
+  const w = window.open("", "_blank"); // ক্লিকের সাথে সাথে খুলে রাখা হয়, যাতে মোবাইলে পপআপ ব্লক না হয়
+  try {
+    const s = await getSecret(id);
+    const url = safeUrl(s.wordpressLink);
+    if (!url) { if (w) w.close(); toast("এই কনটেন্টের লিংক এখনো যুক্ত করা হয়নি"); return; }
+    if (w) { w.opener = null; w.location.href = url; } else { window.location.href = url; }
+  } catch (err) {
+    if (w) w.close();
+    toast(err.code === "permission-denied" ? "এই কনটেন্টটি প্রিমিয়ামে আনলক করুন" : "লিংক আনা যায়নি, আবার চেষ্টা করুন");
+  }
+});
+
+document.addEventListener("click", async (e) => {
   const btn = e.target.closest("[data-detail]");
   if (!btn) return;
   const item = contentIndex[btn.dataset.id];
   if (!item) return;
   if (!item.isFree && !isPremiumUser()) { toast("এই কনটেন্টটি প্রিমিয়ামে আনলক করুন"); showScreen("screen-premium"); return; }
 
-  let html = `<h2 style="margin-bottom:10px;">${esc(item.title)}</h2>`;
-  html += `<p><strong>ডেভেলপমেন্ট এরিয়া:</strong> ${esc(item.developmentArea || "-")}</p>`;
-  html += `<div class="rules-box"><strong>খেলার নিয়ম</strong>${esc(item.rules || "-")}</div>`;
-  if (item.imageDriveLink) html += `<p><a href="${esc(item.imageDriveLink)}" target="_blank" rel="noopener">📷 ছবি দেখুন</a></p>`;
-  if (item.videoYoutubeLink) html += `<p><a href="${esc(item.videoYoutubeLink)}" target="_blank" rel="noopener">🎬 ভিডিও দেখুন</a></p>`;
-  html += `<button class="btn-primary" id="btnGoToolsFromActivity" data-activity-id="${item.id}" style="margin-top:10px;">এই খেলার টুলস কিনুন</button>`;
-  document.getElementById("detailModalBody").innerHTML = html;
+  const body = document.getElementById("detailModalBody");
+  body.innerHTML = `<h2 style="margin-bottom:10px;">${esc(item.title)}</h2><p>লোড হচ্ছে...</p>`;
   document.getElementById("detailModal").classList.add("active");
+  try {
+    const s = await getSecret(item.id);
+    let html = `<h2 style="margin-bottom:10px;">${esc(item.title)}</h2>`;
+    html += `<p><strong>ডেভেলপমেন্ট এরিয়া:</strong> ${esc(item.developmentArea || "-")}</p>`;
+    html += `<div class="rules-box"><strong>খেলার নিয়ম</strong>${esc(s.rules || "-")}</div>`;
+    if (safeUrl(s.imageDriveLink)) html += `<p><a href="${esc(safeUrl(s.imageDriveLink))}" target="_blank" rel="noopener">📷 ছবি দেখুন</a></p>`;
+    if (safeUrl(s.videoYoutubeLink)) html += `<p><a href="${esc(safeUrl(s.videoYoutubeLink))}" target="_blank" rel="noopener">🎬 ভিডিও দেখুন</a></p>`;
+    html += `<button class="btn-primary" id="btnGoToolsFromActivity" data-activity-id="${item.id}" style="margin-top:10px;">এই খেলার টুলস কিনুন</button>`;
+    body.innerHTML = html;
+  } catch (err) {
+    body.innerHTML = `<h2>${esc(item.title)}</h2><p>${err.code === "permission-denied" ? "এই কনটেন্টটি প্রিমিয়ামে আনলক করুন।" : "কনটেন্ট লোড করা যায়নি, আবার চেষ্টা করুন।"}</p>`;
+  }
 });
 document.getElementById("closeDetailModal").addEventListener("click", () => document.getElementById("detailModal").classList.remove("active"));
 
@@ -555,7 +633,7 @@ onSnapshot(doc(db, "siteContent", "knowKids"), (snap) => {
   document.getElementById("marqueeText").textContent = d.marqueeText || "শিশুদের সুষ্ঠুভাবে গড়ে তুলুন; আগামী পৃথিবী সুন্দর করুন";
   const linkEl = document.getElementById("knowKidsArticleLink");
   linkEl.textContent = (d.wordpressTitle || "নিবন্ধ পড়তে এখানে ক্লিক করুন") + " →";
-  linkEl.href = d.wordpressLink || "#";
+  linkEl.href = safeUrl(d.wordpressLink) || "#";
 });
 
 /* ---------------------------------------------------------
@@ -573,8 +651,8 @@ onSnapshot(query(collection(db, "tools"), orderBy("createdAt", "desc")), (snap) 
     const div = document.createElement("div");
     div.className = "content-card";
     div.innerHTML = `
-      <h3>${t.name}</h3>
-      <div class="meta">মূল্য: ৳${t.price || "-"} ${t.materials ? "· উপকরণ: " + t.materials : ""}</div>
+      <h3>${esc(t.name)}</h3>
+      <div class="meta">মূল্য: ৳${esc(t.price || "-")} ${t.materials ? "· উপকরণ: " + esc(t.materials) : ""}</div>
       <div class="actions">
         <button data-tool-detail="${t.id}">বিস্তারিত</button>
         <button data-order="${t.id}">কিনুন</button>
@@ -587,10 +665,10 @@ document.addEventListener("click", (e) => {
   if (d) {
     const t = window.__toolsCache[d.dataset.toolDetail];
     document.getElementById("detailModalBody").innerHTML = `
-      <h2>${t.name}</h2>
-      <p><strong>মূল্য:</strong> ৳${t.price || "-"}</p>
-      <p><strong>আইটেম:</strong> ${t.itemsDetails || "-"}</p>
-      <p><strong>তৈরির উপকরণ:</strong> ${t.materials || "-"}</p>`;
+      <h2>${esc(t.name)}</h2>
+      <p><strong>মূল্য:</strong> ৳${esc(t.price || "-")}</p>
+      <p><strong>আইটেম:</strong> ${esc(t.itemsDetails || "-")}</p>
+      <p><strong>তৈরির উপকরণ:</strong> ${esc(t.materials || "-")}</p>`;
     document.getElementById("detailModal").classList.add("active");
   }
   const o = e.target.closest("[data-order]");
@@ -683,18 +761,98 @@ function renderProgressSummary() {
 }
 
 /* ---------------------------------------------------------
-   PAYMENT REQUESTS
+   প্রিমিয়াম প্ল্যান ও PAYMENT REQUESTS
 --------------------------------------------------------- */
 const PAY_METHOD_LABELS = { bkash: "বিকাশ", nagad: "নগদ", rocket: "রকেট", bank: "ব্যাংক" };
+let planPrices = {};   // এডমিন নির্ধারিত ফি: { y1, y2, y3, lifetime }
+let myRequests = [];
+let selectedPlan = null;
+
+onSnapshot(doc(db, "siteContent", "premiumPlans"), (snap) => {
+  planPrices = snap.exists() ? snap.data() : {};
+  renderPremiumScreen();
+}, (err) => console.error("plans", err));
+
+function currentCycle() {
+  return (currentGuardianData && currentGuardianData.premiumCycle) || 0;
+}
+
+function renderPremiumScreen() {
+  const statusBox = document.getElementById("premiumStatusBox");
+  const form = document.getElementById("premiumRequestForm");
+  if (!statusBox || !form || !currentGuardianData) return;
+  const g = currentGuardianData;
+  const state = premiumState(g);
+
+  if (state === "active") {
+    const plan = planInfo(g.premiumPlan);
+    const label = plan ? plan.label : "আজীবন";
+    const detail = g.premiumUntil
+      ? `${label} · শেষ হবে ${fmtDate(g.premiumUntil)} (আর ${daysLeft(g.premiumUntil)} দিন)`
+      : label;
+    statusBox.innerHTML = `<div class="premium-status"><strong>✨ প্রিমিয়াম চালু আছে</strong><span>মেয়াদ: ${esc(detail)}</span></div>`;
+    form.style.display = "none";
+    return;
+  }
+
+  statusBox.innerHTML = state === "expired"
+    ? `<div class="premium-status expired"><strong>প্রিমিয়ামের মেয়াদ শেষ হয়েছে</strong><span>${esc(fmtDate(g.premiumUntil))}-এ শেষ হয়েছে। নতুন করে রিকুয়েস্ট করুন।</span></div>`
+    : "";
+  form.style.display = "block";
+  renderPlanOptions();
+}
+
+function renderPlanOptions() {
+  const el = document.getElementById("planOptions");
+  const cycle = currentCycle();
+  const cycleRequests = myRequests.filter(r => r.plan && (r.cycle || 0) === cycle);
+  el.innerHTML = PREMIUM_PLANS.map(p => {
+    const price = Number(planPrices[p.key]);
+    const hasPrice = price > 0;
+    const req = cycleRequests.find(r => r.plan === p.key);
+    const blocked = !!req && req.status !== "rejected";
+    const disabled = !hasPrice || blocked;
+    let tag = "";
+    if (!hasPrice) tag = "ফি এখনো নির্ধারিত হয়নি";
+    else if (blocked) tag = req.status === "approved" ? "অ্যাপ্রুভ হয়েছে" : "রিকুয়েস্ট পাঠানো হয়েছে — এডমিনের যাচাইয়ের অপেক্ষায়";
+    else if (req) tag = "আগের রিকুয়েস্ট বাতিল হয়েছে — আবার পাঠাতে পারেন";
+    const checked = selectedPlan === p.key && !disabled;
+    return `<label class="plan-option ${disabled ? "disabled" : ""}">
+      <input type="radio" name="planChoice" value="${p.key}" ${disabled ? "disabled" : ""} ${checked ? "checked" : ""}>
+      <span class="plan-name">${p.label}${tag ? `<span class="plan-tag">${tag}</span>` : ""}</span>
+      <span class="plan-price">${hasPrice ? "৳ " + price : ""}</span>
+    </label>`;
+  }).join("");
+}
+
+document.addEventListener("change", (e) => {
+  if (e.target && e.target.name === "planChoice") selectedPlan = e.target.value;
+});
 
 document.getElementById("btnSubmitPayment").addEventListener("click", async () => {
+  if (!currentGuardianUid) return;
+  if (premiumState(currentGuardianData) === "active") { toast("আপনার প্রিমিয়াম এখনো চালু আছে"); return; }
+  if (!selectedPlan) { toast("আগে মেয়াদ বেছে নিন"); return; }
+  const price = Number(planPrices[selectedPlan]);
+  if (!(price > 0)) { toast("এই মেয়াদের ফি এখনো নির্ধারিত হয়নি"); return; }
   const trxId = document.getElementById("payTrxId").value.trim();
   const senderNumber = document.getElementById("payFromNumber").value.trim().replace(/\s/g, "");
   if (!trxId) { toast("ট্রানজেকশন আইডি দিন"); return; }
   if (!senderNumber) { toast("যে নাম্বার থেকে পেমেন্ট করেছেন সেটি দিন"); return; }
+
+  const cycle = currentCycle();
+  const id = `${currentGuardianUid}_${selectedPlan}_${cycle}`;
+  const existing = myRequests.find(r => r.id === id);
+  if (existing && existing.status !== "rejected") { toast("এই মেয়াদের জন্য ইতিমধ্যে রিকুয়েস্ট করা হয়েছে"); return; }
+
+  const plan = planInfo(selectedPlan);
   try {
-    await addDoc(collection(db, "paymentRequests"), {
+    await setDoc(doc(db, "paymentRequests", id), {
       guardianUid: currentGuardianUid,
+      plan: selectedPlan,
+      planLabel: plan.label,
+      amount: price,
+      cycle,
       method: document.getElementById("payMethod").value,
       transactionId: trxId,
       senderNumber,
@@ -703,29 +861,39 @@ document.getElementById("btnSubmitPayment").addEventListener("click", async () =
     });
     document.getElementById("payTrxId").value = "";
     document.getElementById("payFromNumber").value = "";
+    selectedPlan = null;
     toast("রিকুয়েস্ট পাঠানো হয়েছে, এডমিন যাচাই করবেন");
   } catch (err) {
-    toast("রিকুয়েস্ট পাঠানো যায়নি: " + err.message);
+    toast(err.code === "permission-denied"
+      ? "রিকুয়েস্ট পাঠানো যায়নি — এই মেয়াদে আগেই রিকুয়েস্ট করা হয়েছে অথবা প্রিমিয়াম এখনো চালু আছে"
+      : "রিকুয়েস্ট পাঠানো যায়নি: " + err.message);
   }
 });
+
+function renderPaymentHistory() {
+  const el = document.getElementById("paymentHistory");
+  el.innerHTML = "<h3 style='margin-bottom:10px;'>আপনার রিকুয়েস্টসমূহ</h3>";
+  myRequests.forEach(r => {
+    const pillClass = r.status === "approved" ? "approved" : r.status === "rejected" ? "rejected" : "pending";
+    const pillTxt = r.status === "approved" ? "অ্যাপ্রুভড" : r.status === "rejected" ? "বাতিল" : "অপেক্ষমান";
+    el.innerHTML += `<div class="content-card">
+      <h3 style="font-size:14.5px;">${esc(r.planLabel || "প্রিমিয়াম")}${r.amount ? " — ৳ " + esc(r.amount) : ""}</h3>
+      <div class="meta">${PAY_METHOD_LABELS[r.method] || esc(r.method)} · ট্রানজেকশন: ${esc(r.transactionId)}<br>পেমেন্টের নাম্বার: ${esc(r.senderNumber || "—")}<br>${fmtDateTime(r.createdAt)}</div>
+      <span class="pill ${pillClass}">${pillTxt}</span></div>`;
+  });
+}
 
 function watchPaymentRequests() {
   if (!currentGuardianUid) return;
   const q = query(collection(db, "paymentRequests"), where("guardianUid", "==", currentGuardianUid));
   onSnapshot(q, (snap) => {
-    const el = document.getElementById("paymentHistory");
-    el.innerHTML = "<h3 style='margin-bottom:10px;'>আপনার রিকুয়েস্টসমূহ</h3>";
-    const rows = snap.docs.map(d => d.data())
+    myRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (toMillis(b.createdAt) || Date.now()) - (toMillis(a.createdAt) || Date.now()));
-    rows.forEach(r => {
-      const pillClass = r.status === "approved" ? "approved" : r.status === "rejected" ? "rejected" : "pending";
-      const pillTxt = r.status === "approved" ? "অ্যাপ্রুভড" : r.status === "rejected" ? "বাতিল" : "অপেক্ষমান";
-      el.innerHTML += `<div class="content-card">
-        <div class="meta">${PAY_METHOD_LABELS[r.method] || esc(r.method)} · ট্রানজেকশন: ${esc(r.transactionId)}<br>পেমেন্টের নাম্বার: ${esc(r.senderNumber || "—")}</div>
-        <span class="pill ${pillClass}">${pillTxt}</span></div>`;
-    });
+    renderPaymentHistory();
+    renderPremiumScreen();
   }, (err) => console.error("payments", err));
 }
+
 
 /* ---------------------------------------------------------
    MY ORDERS + RECEIPT (image / PDF / share)
@@ -747,8 +915,8 @@ function watchMyOrders() {
       const div = document.createElement("div");
       div.className = "content-card";
       div.innerHTML = `
-        <h3>${o.toolName}</h3>
-        <div class="meta">পরিমাণ: ${o.quantity} · ৳${(o.price||0) * (o.quantity||1)}</div>
+        <h3>${esc(o.toolName)}</h3>
+        <div class="meta">পরিমাণ: ${esc(o.quantity)} · ৳${esc((Number(o.price)||0) * (Number(o.quantity)||1))}</div>
         <span class="pill ${pillClass}">${pillTxt}</span>
         <div class="actions"><button data-my-receipt="${o.id}">রশিদ দেখুন</button></div>`;
       listEl.appendChild(div);
@@ -769,14 +937,14 @@ function openReceipt(orderId) {
     <p><strong>রশিদ নং:</strong> ${orderId.slice(0, 8).toUpperCase()}</p>
     <p><strong>তারিখ:</strong> ${dateStr}</p>
     <hr style="border:none;border-top:1px solid #eee;margin:10px 0;">
-    <p><strong>আইটেম:</strong> ${o.toolName}</p>
-    <p><strong>পরিমাণ:</strong> ${o.quantity}</p>
-    <p><strong>মূল্য/একক:</strong> ৳${o.price || "-"}</p>
-    <p><strong>মোট:</strong> ৳${(o.price || 0) * (o.quantity || 1)}</p>
+    <p><strong>আইটেম:</strong> ${esc(o.toolName)}</p>
+    <p><strong>পরিমাণ:</strong> ${esc(o.quantity)}</p>
+    <p><strong>মূল্য/একক:</strong> ৳${esc(o.price || "-")}</p>
+    <p><strong>মোট:</strong> ৳${esc((Number(o.price) || 0) * (Number(o.quantity) || 1))}</p>
     <hr style="border:none;border-top:1px solid #eee;margin:10px 0;">
-    <p><strong>ঠিকানা:</strong> ${o.address || "-"}</p>
-    <p><strong>হোয়াটসএপ:</strong> ${o.whatsapp || "-"}</p>
-    <p><strong>স্ট্যাটাস:</strong> ${o.status}</p>
+    <p><strong>ঠিকানা:</strong> ${esc(o.address || "-")}</p>
+    <p><strong>হোয়াটসএপ:</strong> ${esc(o.whatsapp || "-")}</p>
+    <p><strong>স্ট্যাটাস:</strong> ${esc(o.status)}</p>
   `;
   document.getElementById("receiptModal").classList.add("active");
 }

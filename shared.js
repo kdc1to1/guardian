@@ -110,3 +110,54 @@ export function categorySummary(kind, items, getReport, isPremium) {
     last,
   };
 }
+
+// ---------- প্রিমিয়াম প্ল্যান ও মেয়াদ ----------
+export const PREMIUM_PLANS = [
+  { key: "y1", label: "১ বছর", years: 1 },
+  { key: "y2", label: "২ বছর", years: 2 },
+  { key: "y3", label: "৩ বছর", years: 3 },
+  { key: "lifetime", label: "আজীবন", years: null },
+];
+
+export function planInfo(key) {
+  return PREMIUM_PLANS.find(p => p.key === key) || null;
+}
+
+// অ্যাপ্রুভের সময় থেকে মেয়াদ শেষের সময় (আজীবন হলে null)
+export function planUntilDate(planKey, fromMs) {
+  const p = planInfo(planKey);
+  if (!p || p.years == null) return null;
+  const d = new Date(fromMs);
+  d.setFullYear(d.getFullYear() + p.years);
+  return d;
+}
+
+// মেয়াদ শেষ হলে স্বয়ংক্রিয়ভাবে প্রিমিয়াম বাতিল ধরা হয় (premiumUntil না থাকলে আজীবন)
+export function effectivePremium(g) {
+  if (!g || !g.isPremium) return false;
+  const until = toMillis(g.premiumUntil);
+  return !until || Date.now() < until;
+}
+
+export function premiumState(g) {
+  if (!g || !g.isPremium) return "free";
+  return effectivePremium(g) ? "active" : "expired";
+}
+
+export function fmtDate(v) {
+  const ms = toMillis(v);
+  if (!ms) return "";
+  return new Date(ms).toLocaleDateString("bn-BD", { day: "numeric", month: "long", year: "numeric" });
+}
+
+export function daysLeft(v) {
+  const ms = toMillis(v);
+  if (!ms) return null;
+  return Math.max(0, Math.ceil((ms - Date.now()) / 86400000));
+}
+
+// শুধু http/https লিংক গ্রহণযোগ্য (javascript: ইত্যাদি বাদ)
+export function safeUrl(u) {
+  const s = String(u == null ? "" : u).trim();
+  return /^https?:\/\//i.test(s) ? s : "";
+}

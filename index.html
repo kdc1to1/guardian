@@ -42,6 +42,7 @@
 
     <button class="btn-primary" id="btnLogin">লগইন করুন</button>
     <p class="link-switch"><a id="goForgotPw">পাসওয়ার্ড ভুলে গেছেন?</a></p>
+    <div id="resetNotice" class="notice-box" style="display:none;"></div>
 
     <p class="link-switch">নতুন অভিভাবক? <a id="goRegister">রেজিস্ট্রেশন করুন</a></p>
 
@@ -275,29 +276,40 @@
   <!-- ================= PROFILE / PREMIUM ================= -->
   <section class="screen" id="screen-premium">
     <div class="section-head"><button class="back" data-go="screen-dashboard">←</button><h2>প্রিমিয়াম ভার্সন</h2></div>
-    <div class="rules-box">
-      <strong>পেমেন্টের নিয়ম</strong>
-      বিকাশ / নগদ / রকেট / ব্যাংকে পে করুন, তারপর ট্রানজেকশন আইডি ও যে নাম্বার থেকে পেমেন্ট করেছেন সেটি দিয়ে রিকুয়েস্ট করুন। এডমিন যাচাই করে অ্যাপ্রুভ করলেই সব কনটেন্ট আনলক হবে।
+
+    <div id="premiumStatusBox"></div>
+
+    <div id="premiumRequestForm">
+      <div class="rules-box">
+        <strong>পেমেন্টের নিয়ম</strong>
+        প্রথমে নিচ থেকে মেয়াদ বেছে নিন এবং দেখানো ফি বিকাশ / নগদ / রকেট / ব্যাংকে পে করুন। তারপর ট্রানজেকশন আইডি ও যে নাম্বার থেকে পেমেন্ট করেছেন সেটি দিয়ে রিকুয়েস্ট পাঠান। এডমিন যাচাই করে অ্যাপ্রুভ করলে সব কনটেন্ট আনলক হবে।<br>
+        <small>একই মেয়াদের জন্য দ্বিতীয়বার রিকুয়েস্ট করা যাবে না। একবার অ্যাপ্রুভ হলে মেয়াদ শেষ না হওয়া পর্যন্ত নতুন রিকুয়েস্ট করা যাবে না।</small>
+      </div>
+
+      <div class="field"><label>মেয়াদ বেছে নিন *</label></div>
+      <div id="planOptions"></div>
+
+      <div class="field">
+        <label>পেমেন্ট মাধ্যম *</label>
+        <select id="payMethod">
+          <option value="bkash">বিকাশ</option>
+          <option value="nagad">নগদ</option>
+          <option value="rocket">রকেট</option>
+          <option value="bank">ব্যাংক</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>ট্রানজেকশন আইডি *</label>
+        <input id="payTrxId" type="text">
+      </div>
+      <div class="field">
+        <label>যে নাম্বার থেকে পেমেন্ট করেছেন *</label>
+        <input id="payFromNumber" type="tel" placeholder="01XXXXXXXXX">
+        <small class="hint">বিকাশ/নগদ/রকেট নাম্বার বা ব্যাংক একাউন্টের শেষ কয়েক ডিজিট</small>
+      </div>
+      <button class="btn-primary" id="btnSubmitPayment">রিকুয়েস্ট পাঠান</button>
     </div>
-    <div class="field">
-      <label>পেমেন্ট মাধ্যম *</label>
-      <select id="payMethod">
-        <option value="bkash">বিকাশ</option>
-        <option value="nagad">নগদ</option>
-        <option value="rocket">রকেট</option>
-        <option value="bank">ব্যাংক</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>ট্রানজেকশন আইডি *</label>
-      <input id="payTrxId" type="text">
-    </div>
-    <div class="field">
-      <label>যে নাম্বার থেকে পেমেন্ট করেছেন *</label>
-      <input id="payFromNumber" type="tel" placeholder="01XXXXXXXXX">
-      <small class="hint">বিকাশ/নগদ/রকেট নাম্বার বা ব্যাংক একাউন্টের শেষ কয়েক ডিজিট</small>
-    </div>
-    <button class="btn-primary" id="btnSubmitPayment">রিকুয়েস্ট পাঠান</button>
+
     <div id="paymentHistory" style="margin-top:20px;"></div>
   </section>
 

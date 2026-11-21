@@ -11,12 +11,23 @@ service cloud.firestore {
     function isOwner(uid) {
       return isSignedIn() && request.auth.uid == uid;
     }
+    // গার্ডিয়ানের প্রিমিয়াম এখনো চালু আছে কি না (মেয়াদ শেষ হলে বা আজীবন না হলে false)
+    function premiumActive() {
+      let g = get(/databases/$(database)/documents/guardians/$(request.auth.uid)).data;
+      return g.get('isPremium', false) == true
+        && (g.get('premiumUntil', null) == null || g.premiumUntil > request.time);
+    }
 
     // গার্ডিয়ান প্রোফাইল
     match /guardians/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow create: if isOwner(uid) && request.resource.data.isPremium == false;
-      allow update: if isAdmin() || (isOwner(uid) && request.resource.data.isPremium == resource.data.isPremium);
+      allow create: if isOwner(uid)
+        && request.resource.data.isPremium == false
+        && !request.resource.data.keys().hasAny(['premiumUntil', 'premiumPlan', 'premiumSince', 'premiumCycle']);
+      // গার্ডিয়ান প্রিমিয়াম-সংক্রান্ত কোনো ফিল্ড নিজে বদলাতে পারবে না
+      allow update: if isAdmin() || (isOwner(uid)
+        && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['isPremium', 'premiumUntil', 'premiumPlan', 'premiumSince', 'premiumCycle']));
       allow delete: if isAdmin();
     }
 
@@ -37,6 +48,13 @@ service cloud.firestore {
     match /tools/{id}        { allow read: if true; allow write: if isAdmin(); }
     match /siteContent/{id}  { allow read: if true; allow write: if isAdmin(); }
 
+    // কনটেন্টের সুরক্ষিত অংশ (ওয়ার্ডপ্রেস লিংক, খেলার নিয়ম, ছবি/ভিডিও লিংক):
+    // শুধু এডমিন, অথবা ফ্রি কনটেন্টের ক্ষেত্রে লগইন করা যে কেউ, অথবা প্রিমিয়াম সদস্য (মেয়াদ থাকলে) পড়তে পারবে
+    match /contentSecrets/{id} {
+      allow read: if isAdmin() || (isSignedIn() && (resource.data.isFree == true || premiumActive()));
+      allow write: if isAdmin();
+    }
+
     // কনটেন্টভিত্তিক অগ্রগতি রিপোর্ট — গার্ডিয়ান নিজের শিশুরটা লিখতে/পড়তে পারবে, এডমিন সবগুলো দেখতে পারবে
     match /contentReports/{id} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.guardianUid == request.auth.uid);
@@ -48,8 +66,21 @@ service cloud.firestore {
     // পেমেন্ট রিকুয়েস্ট
     match /paymentRequests/{id} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.guardianUid == request.auth.uid);
-      allow create: if isSignedIn() && request.resource.data.guardianUid == request.auth.uid;
-      allow update: if isAdmin();
+      // প্রিমিয়াম চালু থাকলে নতুন রিকুয়েস্ট করা যাবে না; রিকুয়েস্টের আইডি (গার্ডিয়ান_মেয়াদ_চক্র) নির্দিষ্ট,
+      // তাই একই মেয়াদে দ্বিতীয়বার তৈরি করা যায় না
+      allow create: if isSignedIn()
+        && request.resource.data.guardianUid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.plan in ['y1', 'y2', 'y3', 'lifetime']
+        && !premiumActive();
+      // বাতিল হওয়া রিকুয়েস্ট গার্ডিয়ান আবার 'pending' করে পাঠাতে পারবে
+      allow update: if isAdmin() || (isSignedIn()
+        && resource.data.guardianUid == request.auth.uid
+        && resource.data.status == 'rejected'
+        && request.resource.data.status == 'pending'
+        && request.resource.data.guardianUid == request.auth.uid
+        && request.resource.data.plan == resource.data.plan
+        && !premiumActive());
       allow delete: if isAdmin();
     }
 

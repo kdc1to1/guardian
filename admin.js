@@ -5,10 +5,11 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection,
-  query, orderBy, onSnapshot, serverTimestamp, increment
+  query, orderBy, onSnapshot, serverTimestamp, increment, Timestamp, writeBatch, deleteField
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
-  KIND_ORDER, KIND_LABELS, statusInfo, toMillis, fmtDateTime, esc, sortContent, categorySummary
+  KIND_ORDER, KIND_LABELS, statusInfo, toMillis, fmtDateTime, esc, sortContent, categorySummary,
+  PREMIUM_PLANS, planInfo, planUntilDate, effectivePremium, premiumState, fmtDate, daysLeft
 } from "./shared.js";
 
 function toast(msg) {
@@ -69,26 +70,46 @@ function startAdmin() {
 /* ---------------- কনটেন্ট ম্যানেজমেন্ট (যুক্ত / এডিট / মুছুন) ---------------- */
 async function removeDoc(colName, id) {
   if (!confirm("মুছে ফেলতে চান?")) return;
-  await deleteDoc(doc(db, colName, id));
+  const cfg = CRUD.find(c => c.col === colName);
+  if (cfg && cfg.secret && cfg.secret.length) {
+    const batch = writeBatch(db);
+    batch.delete(doc(db, colName, id));
+    batch.delete(doc(db, "contentSecrets", id));
+    await batch.commit();
+  } else {
+    await deleteDoc(doc(db, colName, id));
+  }
 }
+
+// প্রিমিয়াম কনটেন্টের সুরক্ষিত অংশ (লিংক/নিয়ম) contentSecrets কালেকশনে থাকে
+const secretsCache = {};
+onSnapshot(collection(db, "contentSecrets"), (snap) => {
+  Object.keys(secretsCache).forEach(k => delete secretsCache[k]);
+  snap.forEach(d => { secretsCache[d.id] = d.data(); });
+});
 
 const adminContent = { activity: [], poem: [], story: [], manner: [], dua: [] };
 
 const CRUD = [
   { col: "activities", kind: "activity", btn: "btnAddActivity", table: "tblActivities",
     fields: { title: "actTitle", developmentArea: "actDevArea", rules: "actRules", imageDriveLink: "actImage", videoYoutubeLink: "actVideo", isFree: "actFree" },
+    secret: ["rules", "imageDriveLink", "videoYoutubeLink"],
     cells: ["title", "developmentArea"] },
   { col: "poems", kind: "poem", btn: "btnAddPoem", table: "tblPoems",
     fields: { title: "poemTitle", author: "poemPoet", wordpressLink: "poemLink", isFree: "poemFree" },
+    secret: ["wordpressLink"],
     cells: ["title", "author"] },
   { col: "stories", kind: "story", btn: "btnAddStory", table: "tblStories",
     fields: { title: "storyTitle", author: "storyAuthor", wordpressLink: "storyLink", isFree: "storyFree" },
+    secret: ["wordpressLink"],
     cells: ["title", "author"] },
   { col: "manners", kind: "manner", btn: "btnAddManner", table: "tblManners",
     fields: { title: "mannerTitle", author: "mannerAuthor", wordpressLink: "mannerLink", isFree: "mannerFree" },
+    secret: ["wordpressLink"],
     cells: ["title", "author"] },
   { col: "duas", kind: "dua", btn: "btnAddDua", table: "tblDuas",
     fields: { title: "duaTitle", author: "duaAuthor", wordpressLink: "duaLink", isFree: "duaFree" },
+    secret: ["wordpressLink"],
     cells: ["title", "author"] },
   { col: "tools", kind: null, btn: "btnAddTool", table: "tblTools",
     fields: { name: "toolName", price: "toolPrice", itemsDetails: "toolItems", materials: "toolMaterials", linkedActivityId: "toolLinkedActivity" },
@@ -120,8 +141,9 @@ function clearValues(cfg) {
   });
 }
 function enterEdit(cfg, id) {
-  const item = cfg.cache[id];
-  if (!item) return;
+  const base = cfg.cache[id];
+  if (!base) return;
+  const item = { ...base, ...(secretsCache[id] || {}) };
   fillValues(cfg, item);
   cfg.editingId = id;
   cfg.btnEl.textContent = "আপডেট করুন";
@@ -153,11 +175,25 @@ CRUD.forEach(cfg => {
     const nameKey = cfg.fields.title ? "title" : "name";
     if (!data[nameKey]) { toast("শিরোনাম/নাম লিখুন"); return; }
     try {
+      const secretKeys = cfg.secret || [];
+      const pub = {}, sec = {};
+      Object.entries(data).forEach(([k, v]) => { (secretKeys.includes(k) ? sec : pub)[k] = v; });
+      const secretDoc = { ...sec, kind: cfg.kind, isFree: !!data.isFree };
+
       if (cfg.editingId) {
-        await updateDoc(doc(db, cfg.col, cfg.editingId), { ...data, updatedAt: serverTimestamp() });
+        const batch = writeBatch(db);
+        const cleanup = {};
+        secretKeys.forEach(k => { cleanup[k] = deleteField(); }); // পুরনো খোলা ফিল্ড থাকলে মুছে যাবে
+        batch.update(doc(db, cfg.col, cfg.editingId), { ...pub, ...cleanup, updatedAt: serverTimestamp() });
+        if (secretKeys.length) batch.set(doc(db, "contentSecrets", cfg.editingId), secretDoc, { merge: true });
+        await batch.commit();
         toast("আপডেট হয়েছে");
       } else {
-        await addDoc(collection(db, cfg.col), { ...data, createdAt: serverTimestamp() });
+        const ref = doc(collection(db, cfg.col));
+        const batch = writeBatch(db);
+        batch.set(ref, { ...pub, createdAt: serverTimestamp() });
+        if (secretKeys.length) batch.set(doc(db, "contentSecrets", ref.id), secretDoc);
+        await batch.commit();
         toast("যুক্ত করা হয়েছে");
       }
       exitEdit(cfg);
@@ -244,8 +280,8 @@ onSnapshot(query(collection(db, "orders"), orderBy("createdAt", "desc")), (snap)
     window.__ordersCache[d.id] = { id: d.id, ...o };
     const pillClass = o.status === "confirmed" ? "approved" : o.status === "cancelled" ? "rejected" : "pending";
     tb.innerHTML += `<tr>
-      <td>${o.toolName}</td><td>${o.quantity}</td><td>${o.address||""}</td><td>${o.whatsapp||""}</td>
-      <td><span class="pill ${pillClass}">${o.status}</span></td>
+      <td>${esc(o.toolName)}</td><td>${esc(o.quantity)}</td><td>${esc(o.address || "")}</td><td>${esc(o.whatsapp || "")}</td>
+      <td><span class="pill ${pillClass}">${esc(o.status)}</span></td>
       <td><button class="tiny-btn" style="background:#DFF3EA;color:#1F7E68;" data-receipt="${d.id}">রশিদ</button></td>
       <td>
         <button class="tiny-btn ok" data-order-status="${d.id}:confirmed">কনফার্ম</button>
@@ -270,6 +306,7 @@ function renderPayments() {
          <button class="tiny-btn no" data-pay-reject="${r.id}">বাতিল</button>`
       : "";
     return `<tr>
+      <td>${esc(r.planLabel || "পুরনো রিকুয়েস্ট")}${r.amount ? "<br><b>৳ " + esc(r.amount) + "</b>" : ""}</td>
       <td>${PAY_METHOD_LABELS[r.method] || esc(r.method)}</td>
       <td>${esc(r.transactionId)}</td>
       <td>${esc(r.senderNumber || "—")}</td>
@@ -287,6 +324,20 @@ onSnapshot(collection(db, "paymentRequests"), (snap) => {
 });
 
 /* ---------------- গার্ডিয়ানস ---------------- */
+function premiumPill(g) {
+  const s = premiumState(g);
+  return s === "active" ? `<span class="pill approved">প্রিমিয়াম</span>`
+    : s === "expired" ? `<span class="pill rejected">মেয়াদ শেষ</span>`
+    : `<span class="pill pending">ফ্রি</span>`;
+}
+function premiumDetail(g) {
+  const s = premiumState(g);
+  if (s === "free") return "—";
+  const plan = planInfo(g.premiumPlan);
+  const label = plan ? plan.label : "আজীবন";
+  if (!g.premiumUntil) return esc(label);
+  return esc(label) + "<br><small>" + (s === "active" ? "শেষ: " + fmtDate(g.premiumUntil) + " (" + daysLeft(g.premiumUntil) + " দিন বাকি)" : "শেষ হয়েছে: " + fmtDate(g.premiumUntil)) + "</small>";
+}
 onSnapshot(collection(db, "guardians"), (snap) => {
   const tb = document.querySelector("#tblGuardians tbody");
   const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -295,7 +346,8 @@ onSnapshot(collection(db, "guardians"), (snap) => {
   list.forEach(g => { window.__guardiansCache[g.id] = g; });
   tb.innerHTML = list.map(g => `<tr>
       <td>${esc(g.guardianName)}</td><td>${esc(g.email)}</td><td>${esc(g.whatsapp)}</td>
-      <td><span class="pill ${g.isPremium ? "approved" : "pending"}">${g.isPremium ? "প্রিমিয়াম" : "ফ্রি"}</span></td>
+      <td>${premiumPill(g)}</td>
+      <td>${premiumDetail(g)}</td>
       <td><button class="tiny-btn ok" data-resend-reset="${esc(g.email)}">রিসেট ইমেইল পাঠান</button></td></tr>`).join("");
   renderPayments();
   renderChildrenProgressTable();
@@ -307,7 +359,7 @@ let reportsByChild = {}; // childId -> { "kind:contentId": report }
 
 function childSummaries(child) {
   const g = window.__guardiansCache[child.guardianUid];
-  const premium = !!(g && g.isPremium);
+  const premium = effectivePremium(g);
   const reports = reportsByChild[child.id] || {};
   return KIND_ORDER.map(kind =>
     categorySummary(kind, adminContent[kind], id => reports[kind + ":" + id], premium));
@@ -322,7 +374,7 @@ function renderChildrenProgressTable() {
     const cells = sums.map(s => `<td>${s.reported}/${s.total}<br><b>${s.pct}%</b></td>`).join("");
     return `<tr>
       <td>${esc(c.name)}<br><small>${esc(c.dob || "")}</small></td>
-      <td>${g ? esc(g.guardianName) : "—"}<br><small>${g && g.isPremium ? "প্রিমিয়াম" : "ফ্রি"}</small></td>
+      <td>${g ? esc(g.guardianName) : "—"}<br><small>${effectivePremium(g) ? "প্রিমিয়াম" : "ফ্রি"}</small></td>
       ${cells}
       <td><button class="tiny-btn ok" data-child-report="${c.id}">বিস্তারিত</button></td></tr>`;
   }).join("");
@@ -332,7 +384,7 @@ function openChildReport(childId) {
   const c = childrenList.find(x => x.id === childId);
   if (!c) return;
   const g = window.__guardiansCache[c.guardianUid];
-  const premium = !!(g && g.isPremium);
+  const premium = effectivePremium(g);
   const reports = reportsByChild[childId] || {};
   let html = `<h2 style="margin-bottom:4px;">${esc(c.name)}</h2>
     <p style="font-size:13px; color:var(--ink-soft); margin:0 0 14px;">জন্ম তারিখ: ${esc(c.dob || "—")} · অভিভাবক: ${g ? esc(g.guardianName) : "—"} (${g ? esc(g.whatsapp || "") : ""}) · ${premium ? "প্রিমিয়াম" : "ফ্রি"}</p>`;
@@ -370,6 +422,47 @@ onSnapshot(collection(db, "contentReports"), (snap) => {
   });
   renderChildrenProgressTable();
 });
+/* ---------------- প্রিমিয়াম ফি ---------------- */
+const FEE_INPUTS = { y1: "feeY1", y2: "feeY2", y3: "feeY3", lifetime: "feeLifetime" };
+getDoc(doc(db, "siteContent", "premiumPlans")).then(s => {
+  const d = s.data() || {};
+  Object.entries(FEE_INPUTS).forEach(([k, id]) => { document.getElementById(id).value = d[k] || ""; });
+});
+document.getElementById("btnSaveFees").addEventListener("click", async () => {
+  const data = {};
+  Object.entries(FEE_INPUTS).forEach(([k, id]) => { data[k] = Number(document.getElementById(id).value) || 0; });
+  try {
+    await setDoc(doc(db, "siteContent", "premiumPlans"), data);
+    toast("ফি সেভ হয়েছে");
+  } catch (err) {
+    toast("সেভ করা যায়নি: " + err.message);
+  }
+});
+
+/* ---------------- পুরনো কনটেন্টের লিংক/নিয়ম নিরাপদ জায়গায় সরানো (একবার চালালেই হয়) ---------------- */
+async function migrateSecrets() {
+  let moved = 0;
+  for (const cfg of CRUD.filter(c => c.secret && c.secret.length)) {
+    for (const it of Object.values(cfg.cache)) {
+      if (!cfg.secret.some(k => it[k] !== undefined)) continue;
+      const existing = secretsCache[it.id] || {};
+      const sec = { ...existing, kind: cfg.kind, isFree: !!it.isFree };
+      cfg.secret.forEach(k => { if (existing[k] === undefined && it[k] !== undefined) sec[k] = it[k]; });
+      const cleanup = {};
+      cfg.secret.forEach(k => { cleanup[k] = deleteField(); });
+      const batch = writeBatch(db);
+      batch.set(doc(db, "contentSecrets", it.id), sec);
+      batch.update(doc(db, cfg.col, it.id), cleanup);
+      await batch.commit();
+      moved++;
+    }
+  }
+  toast(moved ? moved + " টি কনটেন্ট নিরাপদ জায়গায় সরানো হয়েছে" : "সরানোর মতো পুরনো কনটেন্ট নেই — সব ঠিক আছে");
+}
+document.getElementById("btnMigrateSecrets").addEventListener("click", async () => {
+  try { await migrateSecrets(); } catch (err) { toast("সমস্যা হয়েছে: " + err.message); }
+});
+
 /* ---------------- DELEGATED CLICK HANDLERS ---------------- */
 document.addEventListener("click", async (e) => {
   const del = e.target.closest("[data-del]");
@@ -386,10 +479,38 @@ document.addEventListener("click", async (e) => {
   const approve = e.target.closest("[data-pay-approve]");
   if (approve) {
     const [id, guardianUid] = approve.dataset.payApprove.split(":");
+    const req = paymentsCache.find(r => r.id === id);
+    const g = window.__guardiansCache[guardianUid];
+    if (!req || !g) { toast("তথ্য লোড হয়নি, একটু পরে চেষ্টা করুন"); return; }
+    if (effectivePremium(g)) {
+      toast("এই গার্ডিয়ানের প্রিমিয়াম এখনো চালু আছে (" + (g.premiumUntil ? fmtDate(g.premiumUntil) + " পর্যন্ত" : "আজীবন") + ") — মেয়াদ শেষ না হওয়া পর্যন্ত নতুন অ্যাপ্রুভ করা যাবে না");
+      return;
+    }
+    let planKey = req.plan;
+    if (!planKey) {
+      if (!confirm("এটি পুরনো রিকুয়েস্ট (কোনো মেয়াদ নেই)। আজীবন প্রিমিয়াম হিসেবে অ্যাপ্রুভ করবেন?")) return;
+      planKey = "lifetime";
+    }
+    const plan = planInfo(planKey);
+    const startMs = Date.now();
+    const untilDate = planUntilDate(planKey, startMs);
     try {
-      await updateDoc(doc(db, "guardians", guardianUid), { isPremium: true });
-      await updateDoc(doc(db, "paymentRequests", id), { status: "approved", reviewedAt: serverTimestamp() });
-      toast("প্রিমিয়াম আনলক করা হয়েছে");
+      await updateDoc(doc(db, "guardians", guardianUid), {
+        isPremium: true,
+        premiumPlan: planKey,
+        premiumSince: Timestamp.fromMillis(startMs),
+        premiumUntil: untilDate ? Timestamp.fromDate(untilDate) : null,
+        premiumCycle: increment(1),
+      });
+      await updateDoc(doc(db, "paymentRequests", id), {
+        status: "approved", reviewedAt: serverTimestamp(),
+        validUntil: untilDate ? Timestamp.fromDate(untilDate) : null,
+      });
+      // একই গার্ডিয়ানের অন্য অপেক্ষমান রিকুয়েস্টগুলো বন্ধ করে দেওয়া হয়
+      for (const other of paymentsCache.filter(r => r.guardianUid === guardianUid && r.id !== id && r.status === "pending")) {
+        await updateDoc(doc(db, "paymentRequests", other.id), { status: "rejected", reviewedAt: serverTimestamp(), autoClosed: true });
+      }
+      toast("প্রিমিয়াম চালু হয়েছে (" + plan.label + (untilDate ? " — " + fmtDate(untilDate.getTime()) + " পর্যন্ত" : "") + ")");
     } catch (err) {
       toast("অ্যাপ্রুভ করা যায়নি: " + err.message);
     }
@@ -427,14 +548,14 @@ function openReceipt(orderId) {
     <p><strong>রশিদ নং:</strong> ${orderId.slice(0, 8).toUpperCase()}</p>
     <p><strong>তারিখ:</strong> ${dateStr}</p>
     <hr style="border:none;border-top:1px solid #eee;margin:10px 0;">
-    <p><strong>আইটেম:</strong> ${o.toolName}</p>
-    <p><strong>পরিমাণ:</strong> ${o.quantity}</p>
-    <p><strong>মূল্য/একক:</strong> ৳${o.price || "-"}</p>
-    <p><strong>মোট:</strong> ৳${(o.price || 0) * (o.quantity || 1)}</p>
+    <p><strong>আইটেম:</strong> ${esc(o.toolName)}</p>
+    <p><strong>পরিমাণ:</strong> ${esc(o.quantity)}</p>
+    <p><strong>মূল্য/একক:</strong> ৳${esc(o.price || "-")}</p>
+    <p><strong>মোট:</strong> ৳${esc((Number(o.price) || 0) * (Number(o.quantity) || 1))}</p>
     <hr style="border:none;border-top:1px solid #eee;margin:10px 0;">
-    <p><strong>ঠিকানা:</strong> ${o.address || "-"}</p>
-    <p><strong>হোয়াটসএপ:</strong> ${o.whatsapp || "-"}</p>
-    <p><strong>স্ট্যাটাস:</strong> ${o.status}</p>
+    <p><strong>ঠিকানা:</strong> ${esc(o.address || "-")}</p>
+    <p><strong>হোয়াটসএপ:</strong> ${esc(o.whatsapp || "-")}</p>
+    <p><strong>স্ট্যাটাস:</strong> ${esc(o.status)}</p>
   `;
   document.getElementById("receiptModal").classList.add("active");
 }
