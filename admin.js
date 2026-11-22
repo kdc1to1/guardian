@@ -92,9 +92,10 @@ const adminContent = { activity: [], poem: [], story: [], manner: [], dua: [] };
 
 const CRUD = [
   { col: "activities", kind: "activity", btn: "btnAddActivity", table: "tblActivities",
-    fields: { title: "actTitle", developmentArea: "actDevArea", rules: "actRules", imageDriveLink: "actImage", videoYoutubeLink: "actVideo", isFree: "actFree" },
-    secret: ["rules", "imageDriveLink", "videoYoutubeLink"],
-    cells: ["title", "developmentArea"] },
+    fields: { title: "actTitle", goalOutput: "actGoal", wordpressLink: "actLink", isFree: "actFree" },
+    // পুরনো খেলার নিয়ম/ছবি/ভিডিও ফিল্ডও সুরক্ষিত তালিকায় রাখা হয়েছে, যাতে "সুরক্ষিত জায়গায় সরান" বাটন সেগুলোও গুছিয়ে দেয়
+    secret: ["wordpressLink", "rules", "imageDriveLink", "videoYoutubeLink"],
+    cells: ["title", "goalOutput"] },
   { col: "poems", kind: "poem", btn: "btnAddPoem", table: "tblPoems",
     fields: { title: "poemTitle", author: "poemPoet", wordpressLink: "poemLink", isFree: "poemFree" },
     secret: ["wordpressLink"],
@@ -111,6 +112,9 @@ const CRUD = [
     fields: { title: "duaTitle", author: "duaAuthor", wordpressLink: "duaLink", isFree: "duaFree" },
     secret: ["wordpressLink"],
     cells: ["title", "author"] },
+  { col: "paymentMethods", kind: null, btn: "btnAddPayMethod", table: "tblPayMethods",
+    fields: { name: "pmName", number: "pmNumber", holder: "pmHolder", txTypes: "pmTxTypes", note: "pmNote" },
+    required: ["name", "number"], cells: ["name", "number"] },
   { col: "tools", kind: null, btn: "btnAddTool", table: "tblTools",
     fields: { name: "toolName", price: "toolPrice", itemsDetails: "toolItems", materials: "toolMaterials", linkedActivityId: "toolLinkedActivity" },
     numbers: ["price"], cells: ["name", "price"] },
@@ -144,6 +148,7 @@ function enterEdit(cfg, id) {
   const base = cfg.cache[id];
   if (!base) return;
   const item = { ...base, ...(secretsCache[id] || {}) };
+  if (item.goalOutput == null && item.developmentArea) item.goalOutput = item.developmentArea;
   fillValues(cfg, item);
   cfg.editingId = id;
   cfg.btnEl.textContent = "আপডেট করুন";
@@ -173,7 +178,8 @@ CRUD.forEach(cfg => {
   cfg.btnEl.addEventListener("click", async () => {
     const data = readValues(cfg);
     const nameKey = cfg.fields.title ? "title" : "name";
-    if (!data[nameKey]) { toast("শিরোনাম/নাম লিখুন"); return; }
+    const requiredKeys = cfg.required || [nameKey];
+    if (requiredKeys.some(k => !data[k])) { toast("* চিহ্নিত ঘরগুলো (নাম/শিরোনাম ও নাম্বার) পূরণ করুন"); return; }
     try {
       const secretKeys = cfg.secret || [];
       const pub = {}, sec = {};
@@ -211,7 +217,11 @@ CRUD.forEach(cfg => {
 
     const tb = document.querySelector(`#${cfg.table} tbody`);
     tb.innerHTML = items.map(it => {
-      const cells = cfg.cells.map(k => `<td>${k === "price" ? "৳" + esc(it[k]) : esc(it[k] || "")}</td>`).join("");
+      const cells = cfg.cells.map(k => {
+        if (k === "price") return `<td>৳${esc(it[k])}</td>`;
+        if (k === "goalOutput") return `<td>${esc(it.goalOutput || it.developmentArea || "")}</td>`;
+        return `<td>${esc(it[k] || "")}</td>`;
+      }).join("");
       const freeCell = cfg.kind ? `<td>${it.isFree ? "ফ্রি" : "পেইড"}</td>` : "";
       return `<tr>${cells}${freeCell}<td style="white-space:nowrap;">
         <button class="tiny-btn ok" data-edit="${cfg.col}:${it.id}">এডিট</button>
@@ -307,7 +317,7 @@ function renderPayments() {
       : "";
     return `<tr>
       <td>${esc(r.planLabel || "পুরনো রিকুয়েস্ট")}${r.amount ? "<br><b>৳ " + esc(r.amount) + "</b>" : ""}</td>
-      <td>${PAY_METHOD_LABELS[r.method] || esc(r.method)}</td>
+      <td>${esc(r.methodName || PAY_METHOD_LABELS[r.method] || r.method)}${r.txType ? "<br><small>" + esc(r.txType) + "</small>" : ""}${r.methodNumber ? "<br><small>→ " + esc(r.methodNumber) + "</small>" : ""}</td>
       <td>${esc(r.transactionId)}</td>
       <td>${esc(r.senderNumber || "—")}</td>
       <td>${g ? esc(g.guardianName) + "<br><small>" + esc(g.whatsapp || "") + "</small>" : "—"}</td>

@@ -84,6 +84,9 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // পেমেন্ট মাধ্যম ও নাম্বার (এডমিন যোগ করে; গার্ডিয়ানদের দেখানোর জন্য সবাই পড়তে পারবে)
+    match /paymentMethods/{id} { allow read: if true; allow write: if isAdmin(); }
+
     // টুলস অর্ডার
     match /orders/{id} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.guardianUid == request.auth.uid);

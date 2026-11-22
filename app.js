@@ -182,6 +182,79 @@ document.getElementById("btnRegisterSubmit").addEventListener("click", async () 
 });
 
 /* ---------------------------------------------------------
+   ইন্সটল সহায়তা (পাবলিক প্রচারের জন্য): নিরাপদ ইন্সটল বাটন + ফেসবুক/মেসেঞ্জারের ভেতরের ব্রাউজারের সতর্কতা
+--------------------------------------------------------- */
+let deferredInstallPrompt = null;
+
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+function isInAppBrowser() {
+  return /FBAN|FBAV|FB_IAB|FBIOS|Instagram|Messenger|Line\/|MicroMessenger|Snapchat/i.test(navigator.userAgent);
+}
+function isIOS() {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+function installDismissed() {
+  try { return localStorage.getItem("kdcInstallDismissed") === "1"; } catch (e) { return false; }
+}
+
+function renderInstallHelp() {
+  const targets = ["installHelpLogin", "installHelpDash"].map(id => document.getElementById(id)).filter(Boolean);
+  let html = "";
+  if (isStandalone()) {
+    html = "";
+  } else if (isInAppBrowser()) {
+    html = `<div class="notice-box">
+      ⚠️ আপনি এখন ফেসবুক/মেসেঞ্জারের ভেতরের ব্রাউজারে আছেন — এখান থেকে অ্যাপ ইন্সটল হয় না এবং কিছু সুবিধা কাজ না-ও করতে পারে।<br>
+      <b>সমাধান:</b> উপরের ডান কোণের <b>⋮ (তিন ডট)</b> মেনু চাপুন → <b>"Open in Chrome" / "ব্রাউজারে খুলুন"</b> বেছে নিন।
+    </div>`;
+  } else if (deferredInstallPrompt && !installDismissed()) {
+    html = `<div class="install-card">
+      <div>
+        <strong>📲 অ্যাপটি ফোনে ইন্সটল করুন</strong>
+        <span>এটি সম্পূর্ণ নিরাপদ — কোনো APK ফাইল ডাউনলোড লাগে না, সরাসরি ব্রাউজার থেকেই ইন্সটল হয়।</span>
+      </div>
+      <button type="button" class="btn-install" data-install="1">ইন্সটল</button>
+      <button type="button" class="btn-install-x" data-install-dismiss="1" aria-label="বন্ধ করুন">✕</button>
+    </div>`;
+  } else if (isIOS() && !installDismissed()) {
+    html = `<div class="install-card">
+      <div>
+        <strong>📲 আইফোনে ইন্সটল করতে</strong>
+        <span>Safari-র নিচের <b>Share (⬆️)</b> বাটন চাপুন → <b>"Add to Home Screen"</b> বেছে নিন। এটি নিরাপদ, কোনো ফাইল ডাউনলোড হয় না।</span>
+      </div>
+      <button type="button" class="btn-install-x" data-install-dismiss="1" aria-label="বন্ধ করুন">✕</button>
+    </div>`;
+  }
+  targets.forEach(el => { el.innerHTML = html; });
+}
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  renderInstallHelp();
+});
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  renderInstallHelp();
+  toast("অ্যাপ ইন্সটল হয়েছে ✅");
+});
+document.addEventListener("click", async (e) => {
+  if (e.target.closest("[data-install]") && deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    try { await deferredInstallPrompt.userChoice; } catch (err) {}
+    deferredInstallPrompt = null;
+    renderInstallHelp();
+  }
+  if (e.target.closest("[data-install-dismiss]")) {
+    try { localStorage.setItem("kdcInstallDismissed", "1"); } catch (err) {}
+    renderInstallHelp();
+  }
+});
+renderInstallHelp();
+
+/* ---------------------------------------------------------
    SESSION / GUARDIAN STATE
 --------------------------------------------------------- */
 let currentGuardianUid = null;
@@ -393,23 +466,22 @@ function renderCard(item) {
 
   let metaLine = "";
   if (kind === "activity") {
-    metaLine = esc(item.developmentArea || "");
+    const goal = item.goalOutput || item.developmentArea || "";
+    metaLine = goal ? `লক্ষ্য ও আউটপুট: ${esc(goal)}` : "";
   } else {
     const refLabel = { poem: "কবি", story: "লেখক" }[kind] || "রেফারেন্স";
     const refValue = item.author || item.reference || "";
     metaLine = refValue ? `${refLabel}: ${esc(refValue)}` : "";
   }
 
-  let mainBtn;
-  if (kind === "activity") {
-    mainBtn = locked
-      ? `<button class="btn-dim" data-locked-link="1">🔒 বিস্তারিত</button>`
-      : `<button data-detail="activity" data-id="${item.id}">বিস্তারিত দেখুন</button>`;
-  } else {
-    mainBtn = locked
-      ? `<button class="btn-dim" data-locked-link="1">🔒 পড়ুন</button>`
-      : `<button data-open="${kind}:${item.id}">পড়ুন →</button>`;
-  }
+  const mainBtn = locked
+    ? `<button class="btn-dim" data-locked-link="1">🔒 পড়ুন</button>`
+    : `<button data-open="${kind}:${item.id}">পড়ুন →</button>`;
+  // এক্টিভিটির সাথে টুলস লিংক করা থাকলে সরাসরি কেনার বাটন
+  const linkedTool = kind === "activity" && !locked
+    ? Object.values(window.__toolsCache || {}).find(t => t.linkedActivityId === item.id)
+    : null;
+  const toolBtn = linkedTool ? `<button data-buy-tool="${item.id}">🧸 টুলস কিনুন</button>` : "";
   const reportBtn = locked
     ? `<button class="btn-dim" data-locked-link="1">📝 রিপোর্ট 🔒</button>`
     : `<button data-report="${kind}:${item.id}">📝 ${report ? "রিপোর্ট আপডেট" : "রিপোর্ট দিন"}</button>`;
@@ -426,7 +498,7 @@ function renderCard(item) {
     <h3>${esc(item.title)}</h3>
     <div class="meta">${metaLine}</div>
     ${chip}
-    <div class="actions">${mainBtn}${reportBtn}${unlockBtn}</div>
+    <div class="actions">${mainBtn}${reportBtn}${toolBtn}${unlockBtn}</div>
   `;
   return div;
 }
@@ -478,7 +550,7 @@ async function getSecret(id) {
   else {
     // এডমিন এখনো পুরনো কনটেন্ট সরায়নি হলে আগের ফিল্ড থেকে পড়া হয়
     const it = contentIndex[id] || {};
-    data = { wordpressLink: it.wordpressLink, rules: it.rules, imageDriveLink: it.imageDriveLink, videoYoutubeLink: it.videoYoutubeLink };
+    data = { wordpressLink: it.wordpressLink };
   }
   secretCache[id] = data;
   return data;
@@ -503,37 +575,13 @@ document.addEventListener("click", async (e) => {
   }
 });
 
-document.addEventListener("click", async (e) => {
-  const btn = e.target.closest("[data-detail]");
-  if (!btn) return;
-  const item = contentIndex[btn.dataset.id];
-  if (!item) return;
-  if (!item.isFree && !isPremiumUser()) { toast("এই কনটেন্টটি প্রিমিয়ামে আনলক করুন"); showScreen("screen-premium"); return; }
-
-  const body = document.getElementById("detailModalBody");
-  body.innerHTML = `<h2 style="margin-bottom:10px;">${esc(item.title)}</h2><p>লোড হচ্ছে...</p>`;
-  document.getElementById("detailModal").classList.add("active");
-  try {
-    const s = await getSecret(item.id);
-    let html = `<h2 style="margin-bottom:10px;">${esc(item.title)}</h2>`;
-    html += `<p><strong>ডেভেলপমেন্ট এরিয়া:</strong> ${esc(item.developmentArea || "-")}</p>`;
-    html += `<div class="rules-box"><strong>খেলার নিয়ম</strong>${esc(s.rules || "-")}</div>`;
-    if (safeUrl(s.imageDriveLink)) html += `<p><a href="${esc(safeUrl(s.imageDriveLink))}" target="_blank" rel="noopener">📷 ছবি দেখুন</a></p>`;
-    if (safeUrl(s.videoYoutubeLink)) html += `<p><a href="${esc(safeUrl(s.videoYoutubeLink))}" target="_blank" rel="noopener">🎬 ভিডিও দেখুন</a></p>`;
-    html += `<button class="btn-primary" id="btnGoToolsFromActivity" data-activity-id="${item.id}" style="margin-top:10px;">এই খেলার টুলস কিনুন</button>`;
-    body.innerHTML = html;
-  } catch (err) {
-    body.innerHTML = `<h2>${esc(item.title)}</h2><p>${err.code === "permission-denied" ? "এই কনটেন্টটি প্রিমিয়ামে আনলক করুন।" : "কনটেন্ট লোড করা যায়নি, আবার চেষ্টা করুন।"}</p>`;
-  }
-});
 document.getElementById("closeDetailModal").addEventListener("click", () => document.getElementById("detailModal").classList.remove("active"));
 
+// এক্টিভিটির লিংকড টুলস কেনার ফর্ম খোলা
 document.addEventListener("click", (e) => {
-  const goBtn = e.target.closest("#btnGoToolsFromActivity");
-  if (!goBtn) return;
-  document.getElementById("detailModal").classList.remove("active");
-  const activityId = goBtn.dataset.activityId;
-  const linkedTool = Object.values(window.__toolsCache || {}).find(t => t.linkedActivityId === activityId);
+  const buy = e.target.closest("[data-buy-tool]");
+  if (!buy) return;
+  const linkedTool = Object.values(window.__toolsCache || {}).find(t => t.linkedActivityId === buy.dataset.buyTool);
   showScreen("screen-tools");
   if (linkedTool) {
     activeOrderTool = linkedTool;
@@ -643,10 +691,14 @@ let activeOrderTool = null;
 onSnapshot(query(collection(db, "tools"), orderBy("createdAt", "desc")), (snap) => {
   const listEl = document.getElementById("toolsList");
   listEl.innerHTML = "";
-  if (snap.empty) { listEl.innerHTML = `<div class="empty-state"><div class="e">🧸</div>এখনো কোনো টুলস যুক্ত হয়নি</div>`; return; }
+  window.__toolsCache = {};
+  if (snap.empty) {
+    listEl.innerHTML = `<div class="empty-state"><div class="e">🧸</div>এখনো কোনো টুলস যুক্ত হয়নি</div>`;
+    renderList("activity");
+    return;
+  }
   snap.forEach(docSnap => {
     const t = { id: docSnap.id, ...docSnap.data() };
-    window.__toolsCache = window.__toolsCache || {};
     window.__toolsCache[t.id] = t;
     const div = document.createElement("div");
     div.className = "content-card";
@@ -659,6 +711,7 @@ onSnapshot(query(collection(db, "tools"), orderBy("createdAt", "desc")), (snap) 
       </div>`;
     listEl.appendChild(div);
   });
+  renderList("activity"); // লিংকড টুলস থাকলে এক্টিভিটি কার্ডে "টুলস কিনুন" বাটন আসবে
 });
 document.addEventListener("click", (e) => {
   const d = e.target.closest("[data-tool-detail]");
@@ -764,6 +817,7 @@ function renderProgressSummary() {
    প্রিমিয়াম প্ল্যান ও PAYMENT REQUESTS
 --------------------------------------------------------- */
 const PAY_METHOD_LABELS = { bkash: "বিকাশ", nagad: "নগদ", rocket: "রকেট", bank: "ব্যাংক" };
+let payMethods = [];   // এডমিনের যোগ করা পেমেন্ট মাধ্যম ও নাম্বার
 let planPrices = {};   // এডমিন নির্ধারিত ফি: { y1, y2, y3, lifetime }
 let myRequests = [];
 let selectedPlan = null;
@@ -772,6 +826,70 @@ onSnapshot(doc(db, "siteContent", "premiumPlans"), (snap) => {
   planPrices = snap.exists() ? snap.data() : {};
   renderPremiumScreen();
 }, (err) => console.error("plans", err));
+
+onSnapshot(collection(db, "paymentMethods"), (snap) => {
+  payMethods = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((x, y) => (toMillis(x.createdAt) || Number.MAX_SAFE_INTEGER) - (toMillis(y.createdAt) || Number.MAX_SAFE_INTEGER));
+  renderPayMethodOptions();
+}, (err) => console.error("paymentMethods", err));
+
+function parseTxTypes(m) {
+  return String((m && m.txTypes) || "").split(/[,،]/).map(s => s.trim()).filter(Boolean);
+}
+
+function renderPayMethodOptions() {
+  const sel = document.getElementById("payMethod");
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = payMethods.length
+    ? payMethods.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("")
+    : `<option value="">পেমেন্ট নাম্বার এখনো যুক্ত হয়নি</option>`;
+  if (payMethods.some(m => m.id === prev)) sel.value = prev;
+  renderPayMethodInfo();
+}
+
+function renderPayMethodInfo() {
+  const sel = document.getElementById("payMethod");
+  const info = document.getElementById("payMethodInfo");
+  const txField = document.getElementById("payTxTypeField");
+  const txSel = document.getElementById("payTxType");
+  if (!sel || !info) return;
+  const m = payMethods.find(x => x.id === sel.value);
+  if (!m) {
+    info.innerHTML = payMethods.length ? "" : `<div class="notice-box">পেমেন্টের নাম্বার এখনো যুক্ত করা হয়নি। একটু পরে আবার চেষ্টা করুন।</div>`;
+    txField.style.display = "none";
+    txSel.innerHTML = "";
+    return;
+  }
+  info.innerHTML = `<div class="pay-info">
+    <div class="pay-info-title">${esc(m.name)} — এই নাম্বারে/একাউন্টে পাঠান</div>
+    <div class="pay-number">${esc(m.number)}</div>
+    <button type="button" class="btn-copy" data-copy="${esc(m.number)}">📋 নাম্বার কপি করুন</button>
+    ${m.holder ? `<div class="pay-line">একাউন্টের নাম: <b>${esc(m.holder)}</b></div>` : ""}
+    ${m.note ? `<div class="pay-line">${esc(m.note)}</div>` : ""}
+  </div>`;
+  const types = parseTxTypes(m);
+  if (types.length) {
+    txField.style.display = "block";
+    txSel.innerHTML = types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+  } else {
+    txField.style.display = "none";
+    txSel.innerHTML = "";
+  }
+}
+document.getElementById("payMethod").addEventListener("change", renderPayMethodInfo);
+
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-copy]");
+  if (!btn) return;
+  const text = btn.dataset.copy;
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("নাম্বার কপি হয়েছে");
+  } catch (err) {
+    toast("কপি করা যায়নি — নাম্বারটি চেপে ধরে কপি করুন");
+  }
+});
 
 function currentCycle() {
   return (currentGuardianData && currentGuardianData.premiumCycle) || 0;
@@ -835,6 +953,11 @@ document.getElementById("btnSubmitPayment").addEventListener("click", async () =
   if (!selectedPlan) { toast("আগে মেয়াদ বেছে নিন"); return; }
   const price = Number(planPrices[selectedPlan]);
   if (!(price > 0)) { toast("এই মেয়াদের ফি এখনো নির্ধারিত হয়নি"); return; }
+  const method = payMethods.find(x => x.id === document.getElementById("payMethod").value);
+  if (!method) { toast("পেমেন্ট মাধ্যম বেছে নিন"); return; }
+  const txTypes = parseTxTypes(method);
+  const txType = txTypes.length ? document.getElementById("payTxType").value : "";
+  if (txTypes.length && !txType) { toast("লেনদেনের ধরন বেছে নিন"); return; }
   const trxId = document.getElementById("payTrxId").value.trim();
   const senderNumber = document.getElementById("payFromNumber").value.trim().replace(/\s/g, "");
   if (!trxId) { toast("ট্রানজেকশন আইডি দিন"); return; }
@@ -853,7 +976,11 @@ document.getElementById("btnSubmitPayment").addEventListener("click", async () =
       planLabel: plan.label,
       amount: price,
       cycle,
-      method: document.getElementById("payMethod").value,
+      method: method.name,
+      methodId: method.id,
+      methodName: method.name,
+      methodNumber: method.number,
+      txType,
       transactionId: trxId,
       senderNumber,
       status: "pending",
@@ -878,7 +1005,7 @@ function renderPaymentHistory() {
     const pillTxt = r.status === "approved" ? "অ্যাপ্রুভড" : r.status === "rejected" ? "বাতিল" : "অপেক্ষমান";
     el.innerHTML += `<div class="content-card">
       <h3 style="font-size:14.5px;">${esc(r.planLabel || "প্রিমিয়াম")}${r.amount ? " — ৳ " + esc(r.amount) : ""}</h3>
-      <div class="meta">${PAY_METHOD_LABELS[r.method] || esc(r.method)} · ট্রানজেকশন: ${esc(r.transactionId)}<br>পেমেন্টের নাম্বার: ${esc(r.senderNumber || "—")}<br>${fmtDateTime(r.createdAt)}</div>
+      <div class="meta">${esc(r.methodName || PAY_METHOD_LABELS[r.method] || r.method)}${r.txType ? " (" + esc(r.txType) + ")" : ""}${r.methodNumber ? " → " + esc(r.methodNumber) : ""}<br>ট্রানজেকশন: ${esc(r.transactionId)} · যে নাম্বার থেকে: ${esc(r.senderNumber || "—")}<br>${fmtDateTime(r.createdAt)}</div>
       <span class="pill ${pillClass}">${pillTxt}</span></div>`;
   });
 }

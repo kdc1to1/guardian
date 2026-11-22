@@ -477,3 +477,16 @@ body.admin-body #app { max-width: 980px; }
 .premium-status.expired { background: #FBE3DB; }
 .premium-status strong { display: block; font-size: 16px; margin-bottom: 4px; }
 .premium-status span { font-size: 13px; color: #5A4310; }
+
+/* পেমেন্ট তথ্য ও ইন্সটল কার্ড */
+.pay-info { background: var(--white); border: 1.5px dashed var(--teal); border-radius: 14px; padding: 14px; margin: 0 0 14px; }
+.pay-info-title { font-size: 13px; color: var(--ink-soft); margin-bottom: 4px; }
+.pay-number { font-family: 'Baloo Da 2', sans-serif; font-size: 22px; letter-spacing: 0.5px; color: var(--ink); word-break: break-all; }
+.pay-line { font-size: 13px; color: var(--ink-soft); margin-top: 6px; }
+.btn-copy { background: var(--sand-deep); color: var(--ink); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 600; margin-top: 6px; }
+.install-card { display: flex; align-items: center; gap: 10px; background: #EAF7F2; border: 1px solid #BFE3D6; border-radius: 14px; padding: 12px 14px; margin: 0 0 16px; }
+.install-card > div { flex: 1; font-size: 13px; line-height: 1.5; }
+.install-card strong { display: block; font-size: 14.5px; color: var(--teal-deep); }
+.install-card span { color: var(--ink-soft); }
+.btn-install { background: var(--teal); color: var(--white); border-radius: 999px; padding: 9px 16px; font-weight: 700; font-size: 13.5px; }
+.btn-install-x { background: transparent; color: var(--ink-soft); font-size: 16px; padding: 4px 6px; }

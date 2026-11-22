@@ -4,7 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Kids Development Center</title>
+<meta name="description" content="২–৪ বছরের শিশুদের জন্য খেলা, কবিতা, গল্প, আদব শিষ্টাচার ও সূরা-দুআর মাধ্যমে শিক্ষা — One To One School-এর তত্ত্বাবধানে।">
 <link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="KDC">
 <meta name="theme-color" content="#F2542D">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -29,6 +35,8 @@
       <img src="logo.png" alt="KDC" class="login-logo">
       <h1 class="display">Kids Development Center</h1>
     </div>
+
+    <div id="installHelpLogin"></div>
 
     <div class="field">
       <label for="loginEmail">ইমেইল</label>
@@ -138,6 +146,8 @@
       <h1 class="display" id="greetTitle">সালাম, অভিভাবক</h1>
       <p id="greetSub">আজ আপনার শিশুর জন্য কিছু নতুন এক্টিভিটি বেছে নিন</p>
     </div>
+
+    <div id="installHelpDash"></div>
 
     <div class="premium-banner" id="premiumBanner">
       <div class="txt">
@@ -282,7 +292,7 @@
     <div id="premiumRequestForm">
       <div class="rules-box">
         <strong>পেমেন্টের নিয়ম</strong>
-        প্রথমে নিচ থেকে মেয়াদ বেছে নিন এবং দেখানো ফি বিকাশ / নগদ / রকেট / ব্যাংকে পে করুন। তারপর ট্রানজেকশন আইডি ও যে নাম্বার থেকে পেমেন্ট করেছেন সেটি দিয়ে রিকুয়েস্ট পাঠান। এডমিন যাচাই করে অ্যাপ্রুভ করলে সব কনটেন্ট আনলক হবে।<br>
+        প্রথমে নিচ থেকে মেয়াদ বেছে নিন, তারপর পেমেন্ট মাধ্যম বেছে নিলে যে নাম্বারে/একাউন্টে ফি পাঠাতে হবে সেটি দেখানো হবে। ফি পাঠিয়ে ট্রানজেকশন আইডি ও যে নাম্বার থেকে পাঠিয়েছেন সেটি দিয়ে রিকুয়েস্ট করুন। এডমিন যাচাই করে অ্যাপ্রুভ করলে সব কনটেন্ট আনলক হবে।<br>
         <small>একই মেয়াদের জন্য দ্বিতীয়বার রিকুয়েস্ট করা যাবে না। একবার অ্যাপ্রুভ হলে মেয়াদ শেষ না হওয়া পর্যন্ত নতুন রিকুয়েস্ট করা যাবে না।</small>
       </div>
 
@@ -291,12 +301,12 @@
 
       <div class="field">
         <label>পেমেন্ট মাধ্যম *</label>
-        <select id="payMethod">
-          <option value="bkash">বিকাশ</option>
-          <option value="nagad">নগদ</option>
-          <option value="rocket">রকেট</option>
-          <option value="bank">ব্যাংক</option>
-        </select>
+        <select id="payMethod"></select>
+      </div>
+      <div id="payMethodInfo"></div>
+      <div class="field" id="payTxTypeField" style="display:none;">
+        <label>লেনদেনের ধরন * (আপনি কীভাবে পাঠিয়েছেন)</label>
+        <select id="payTxType"></select>
       </div>
       <div class="field">
         <label>ট্রানজেকশন আইডি *</label>

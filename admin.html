@@ -40,6 +40,7 @@
         <button data-go="a-knowkids">শিশুদের জানুন</button>
         <button data-go="a-tools">খেলার টুলস</button>
         <button data-go="a-orders">অর্ডার</button>
+        <button data-go="a-paymethods">পেমেন্ট নাম্বার</button>
         <button data-go="a-fees">প্রিমিয়াম ফি</button>
         <button data-go="a-payments">পেমেন্ট রিকুয়েস্ট</button>
         <button data-go="a-guardians">গার্ডিয়ানস</button>
@@ -62,15 +63,13 @@
       <section class="screen" id="a-activities">
         <div class="admin-topline"><h2>গেইম / এক্টিভিটি</h2></div>
         <div class="admin-form-grid">
-          <div class="field"><label>শিরোনাম</label><input id="actTitle"></div>
-          <div class="field"><label>ডেভেলপমেন্ট এরিয়া</label><input id="actDevArea"></div>
-          <div class="field full"><label>খেলার নিয়ম</label><textarea id="actRules"></textarea></div>
-          <div class="field"><label>ছবি (ড্রাইভ লিংক)</label><input id="actImage"></div>
-          <div class="field"><label>ভিডিও (ইউটিউব লিংক)</label><input id="actVideo"></div>
+          <div class="field"><label>এক্টিভিটির নাম</label><input id="actTitle"></div>
           <div class="field"><label>ফ্রি কনটেন্ট?</label><select id="actFree"><option value="false">না, পেইড</option><option value="true">হ্যাঁ, ফ্রি</option></select></div>
+          <div class="field full"><label>লক্ষ্য ও আউটপুট</label><textarea id="actGoal" placeholder="যেমন: হাতের পেশির সমন্বয় — শিশু রঙিন বল আলাদা করতে পারবে"></textarea></div>
+          <div class="field full"><label>ওয়ার্ডপ্রেস লিংক (নিয়ম, ছবি, ভিডিও সব ওখানে থাকবে)</label><input id="actLink"></div>
           <div class="field full"><button class="btn-primary" id="btnAddActivity">যুক্ত করুন</button></div>
         </div>
-        <table class="admin-table" id="tblActivities"><thead><tr><th>শিরোনাম</th><th>এরিয়া</th><th>ফ্রি</th><th></th></tr></thead><tbody></tbody></table>
+        <table class="admin-table" id="tblActivities"><thead><tr><th>নাম</th><th>লক্ষ্য ও আউটপুট</th><th>ফ্রি</th><th></th></tr></thead><tbody></tbody></table>
       </section>
 
       <section class="screen" id="a-poems">
@@ -158,6 +157,22 @@
       <section class="screen" id="a-orders">
         <div class="admin-topline"><h2>অর্ডার</h2></div>
         <table class="admin-table" id="tblOrders"><thead><tr><th>টুলস</th><th>পরিমাণ</th><th>ঠিকানা</th><th>হোয়াটসএপ</th><th>স্ট্যাটাস</th><th>রশিদ</th><th></th></tr></thead><tbody></tbody></table>
+      </section>
+
+      <section class="screen" id="a-paymethods">
+        <div class="admin-topline"><h2>পেমেন্ট নাম্বার ও মাধ্যম</h2></div>
+        <p style="font-size:13px; color:var(--ink-soft); margin:0 0 14px;">গার্ডিয়ানরা ফি পাঠানোর সময় এখানকার তালিকা থেকে মাধ্যম বেছে নেবে এবং নাম্বারটি দেখতে পাবে। যত খুশি মাধ্যম যোগ করা যাবে (বিকাশ, নগদ, রকেট, ব্যাংক ইত্যাদি)। একই নাম্বারের জন্য আলাদা আলাদা মাধ্যমও যোগ করা যায় (যেমন "বিকাশ পার্সোনাল", "বিকাশ মার্চেন্ট")।<br>
+        <b>ব্যাংক একাউন্ট</b> যোগ করতে চাইলে মাধ্যমের নাম "ব্যাংক", নাম্বার ঘরে একাউন্ট নাম্বার, একাউন্টের নাম ঘরে নাম, আর নোটে ব্যাংকের নাম ও শাখা লিখুন (সবই ঐচ্ছিক, দরকার না থাকলে যোগ করবেন না)।<br>
+        <b>লেনদেনের ধরন:</b> কমা দিয়ে লিখুন (যেমন: সেন্ড মানি, পেমেন্ট) — গার্ডিয়ান এর একটি বেছে নেবে। দরকার না হলে খালি রাখুন।</p>
+        <div class="admin-form-grid">
+          <div class="field"><label>মাধ্যমের নাম *</label><input id="pmName" placeholder="যেমন: বিকাশ (পার্সোনাল)"></div>
+          <div class="field"><label>নাম্বার / একাউন্ট নাম্বার *</label><input id="pmNumber" placeholder="01XXXXXXXXX"></div>
+          <div class="field"><label>একাউন্টের নাম (ঐচ্ছিক)</label><input id="pmHolder"></div>
+          <div class="field"><label>লেনদেনের ধরন (ঐচ্ছিক, কমা দিয়ে)</label><input id="pmTxTypes" placeholder="সেন্ড মানি, পেমেন্ট"></div>
+          <div class="field full"><label>নির্দেশনা / নোট (ঐচ্ছিক)</label><textarea id="pmNote" placeholder="যেমন: ব্যাংকের নাম, শাখা — অথবা 'সেন্ড মানি করলে রেফারেন্সে সন্তানের নাম লিখুন'"></textarea></div>
+          <div class="field full"><button class="btn-primary" id="btnAddPayMethod">যুক্ত করুন</button></div>
+        </div>
+        <table class="admin-table" id="tblPayMethods"><thead><tr><th>মাধ্যম</th><th>নাম্বার / একাউন্ট</th><th></th></tr></thead><tbody></tbody></table>
       </section>
 
       <section class="screen" id="a-fees">
